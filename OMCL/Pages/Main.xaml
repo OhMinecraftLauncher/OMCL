@@ -1,0 +1,17 @@
+﻿<Page x:Class="OMCL.Pages.Main"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:local="clr-namespace:OMCL.Pages"
+      xmlns:ui="clr-namespace:UI;assembly=UI"
+      mc:Ignorable="d" 
+      d:DesignHeight="400" d:DesignWidth="800"
+      Title="Main">
+    <Grid>
+        <ui:NiceButton x:Name="Button" Margin="309,156,309,156"/>
+        <Rectangle x:Name="Mask" Opacity="0" Fill="Black" Margin="0,0,0,0" Visibility="Collapsed" RadiusX="15" RadiusY="15"/>
+        <ui:Dialog x:Name="dia" Height="300" Width="700" Visibility="Hidden"/>
+        <ui:WaitDialog Height="300" Width="500"/>
+    </Grid>
+</Page>

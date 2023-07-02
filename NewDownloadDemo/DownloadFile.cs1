@@ -1,0 +1,113 @@
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
+
+public class MultiThreadDownloader
+{
+    private int numThreads;
+    private string outputFilePath;
+    private string url;
+    private long fileSize;
+    private int bufferSize = 1024 * 1024; // 1MB buffer size
+    private List<Thread> threads = new List<Thread>();
+    private object lockObject = new object();
+    private long bytesDownloaded = 0;
+
+    public MultiThreadDownloader(string url, string outputFilePath, int numThreads = 4)
+    {
+        this.url = url;
+        this.outputFilePath = outputFilePath;
+        this.numThreads = numThreads;
+    }
+
+    public void DownloadAsync()
+    {
+        // Step 1: Get the file size
+        var request = (HttpWebRequest)WebRequest.Create(url);
+        request.Method = "HEAD";
+
+        using (var response = request.GetResponse())
+        {
+            fileSize = response.ContentLength;
+            Console.WriteLine($"File size: {fileSize / (1024 * 1024 * 1.0)} MB");
+        }
+
+        // Step 2: Create output file
+        /*using (var fs = new FileStream(outputFilePath, FileMode.Create, FileAccess.Write, FileShare.Write))
+        {
+            fs.SetLength(fileSize); // Set the file size before writing the content
+        }*/
+        var fs = File.Create(outputFilePath);
+        fs.Close();
+        fs.Dispose();
+
+        // Step 3: Start download threads
+        var blockSize = fileSize / numThreads;
+
+        for (int i = 0; i < numThreads; i++)
+        {
+            var start = i * blockSize;
+            var end = (i == numThreads - 1) ? fileSize - 1 : (i + 1) * blockSize - 1;
+
+            var thread = new Thread(() => DownloadRange(start, end));
+            thread.Start();
+
+            threads.Add(thread);
+        }
+
+        // Step 4: Wait for all threads to finish
+        foreach (var thread in threads)
+        {
+            thread.Join();
+        }
+
+        Console.WriteLine("Download completed.");
+    }
+
+    private void DownloadRange(long start, long end)
+    {
+        while (true)
+        {
+            try
+            {
+                while (start < end)
+                {
+                    var buffer = new byte[bufferSize];
+                    var request = (HttpWebRequest)WebRequest.Create(url);
+
+                    request.AddRange(start, end); // Specify the range to download
+                    var response = (HttpWebResponse)request.GetResponse();
+
+                    using (var responseStream = response.GetResponseStream())
+                    using (var fs = new FileStream(outputFilePath, FileMode.Open, FileAccess.Write, FileShare.Write))
+                    {
+                        var bytesRead = responseStream.Read(buffer, 0, bufferSize);
+
+                        while (bytesRead > 0 && start < end)
+                        {
+                            // Lock the downloaded bytes for thread safety
+                            lock (lockObject)
+                            {
+                                fs.Position = start;
+                                fs.Write(buffer, 0, bytesRead);
+                                start += bytesRead;
+                                bytesDownloaded += bytesRead;
+
+                                Console.WriteLine($"Downloaded {bytesDownloaded} bytes.");
+                            }
+
+                            bytesRead = responseStream.Read(buffer, 0, bufferSize);
+                        }
+                    }
+
+                    response.Close();
+                }
+                break;
+            }
+            catch { }
+        }
+    }
+}

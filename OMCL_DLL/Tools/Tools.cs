@@ -86,11 +86,7 @@ namespace OMCL_DLL.Tools
     public class Tools
     {
         public static string DownloadMinecraftFileUrl = "https://bmclapi2.bangbang93.com/";
-<<<<<<< Updated upstream
         private static readonly string OMCLver = "0.0.0.3";
-=======
-        private static readonly string OMCLver = "0.0.0.1";
->>>>>>> Stashed changes
         public static string Dir = Directory.GetCurrentDirectory();
         public static List<string> LaunchNoFile = new List<string>();
         public static List<string> LaunchNoFileNatives = new List<string>();

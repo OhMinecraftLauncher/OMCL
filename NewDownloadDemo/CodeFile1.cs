@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NewDownloadDemo;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Eventing.Reader;
@@ -406,15 +407,17 @@ public class FileDownloader
 
 public class Program
 {
-    static async Task Main(string[] args)
+    //static async Task Main(string[] args)
+    [STAThread]
+    static void Main(string[] args)
     {
-        Stopwatch stopwatch = new Stopwatch();
+        /*Stopwatch stopwatch = new Stopwatch();
         stopwatch.Start();
 
         /*网络不稳定*/ //FileDownloader downloader = new FileDownloader("https://codeload.github.com/OhMinecraftLauncher/OMCL/zip/refs/heads/main", @"main.zip");
         /*小文件*/ //FileDownloader downloader = new FileDownloader("https://648538699da4abbeb38efa68.openbmclapi.933.moe:4000/download/d722504db9de2b47f46cc592b8528446272ae648?name=client.jar", "1.jar",1);
-        /*大文件*/ FileDownloader downloader = new FileDownloader("https://mirrors.tuna.tsinghua.edu.cn/ubuntu-releases/23.04/ubuntu-23.04-desktop-amd64.iso", @"F:\ABC\2.iso", 10);
-        downloader.OnDownloadCompleted += Downloader_OnDownloadCompleted;
+        /*大文件*/ /*FileDownloader downloader = new FileDownloader("https://mirrors.tuna.tsinghua.edu.cn/ubuntu-releases/23.04/ubuntu-23.04-desktop-amd64.iso", @"F:\ABC\2.iso", 10);
+        /*downloader.OnDownloadCompleted += Downloader_OnDownloadCompleted;
         downloader.OnDownloadStatusChanged += Downloader_OnDownloadStatusChanged;
         await downloader.StartDownloadAsync(false);
 
@@ -429,7 +432,10 @@ public class Program
 
         Console.WriteLine("Time used : " + stopwatch.ElapsedMilliseconds * 1.0 / (1000 * 1.0) + "s");
 
-        Console.ReadLine();
+        Console.ReadLine();*/
+
+        Form1 form1 = new Form1();
+        form1.ShowDialog();
     }
 
     private static void Downloader_OnDownloadStatusChanged(string status)

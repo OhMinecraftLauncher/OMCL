@@ -1786,9 +1786,12 @@ namespace OMCL_DLL.Tools
     public class Link
     {
         public static List<Process> LinkProcess = new List<Process>();
-        public static string StartLink(int client_port)
+        public static readonly string[] servers = { "la.afrps.cn", "frp.104300.xyz" };
+        public static readonly string[] server_tokens = { "afrps.cn", "www.126126.xyz" };
+        public static string FrpcIni = "[common]\nserver_addr = {server_url}\nserver_port = {server_port}\ntoken = {server_token}\n[{link_name}]\ntype = tcp\nlocal_ip = 127.0.0.1\nlocal_port = {client_port}\nremote_port = {random_num}";
+        public static string StartLink(int client_port, int server_id = 0)
         {
-            return StartLink(client_port, "la.afrps.cn", 7000, "afrps.cn");
+            return StartLink(client_port, servers[server_id], 7000, server_tokens[server_id]);
         }
         [STAThread]
         public static string StartLink(int client_port, string server_url, int server_port, string server_token)
@@ -1822,7 +1825,7 @@ namespace OMCL_DLL.Tools
                     try
                     {
                         r = random.Next(10005, 59005);
-                        File.WriteAllText(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.ini" }), $"[common]\r\nserver_addr = {server_url}\r\nserver_port = {server_port}\r\ntoken = {server_token}\r\n\r\n[OMCL_Link_{Process.GetProcessesByName("frpc").Length}]\r\ntype = tcp\r\nlocal_ip = 127.0.0.1\r\nlocal_port = {client_port}\r\nremote_port = {r}");
+                        File.WriteAllText(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.ini" }), FrpcIni.Replace("{server_url}", server_url).Replace("{server_port}", server_port.ToString()).Replace("{server_token}", server_token).Replace("{link_name}", $"OMCL_Link_{Process.GetProcessesByName("frpc").Length}").Replace("{client_port}", client_port.ToString()).Replace("{random_num}", r.ToString()));
                         using (Process process = new Process
                         {
                             StartInfo = new ProcessStartInfo
@@ -1874,7 +1877,25 @@ namespace OMCL_DLL.Tools
                         throw new Exception("错误：启动内网穿透（frpc.exe）服务时出现问题！请检查！");
                     }
                 }
-                string result = Convert.ToBase64String(Encoding.Default.GetBytes(server_url)) + "!" + Convert.ToBase64String(Encoding.Default.GetBytes(r.ToString()));
+                bool flag = false;
+                int server_id = -1;
+                for (int i = 0;i < servers.Length;i++)
+                {
+                    if (server_url == servers[i])
+                    {
+                        flag = true;
+                        server_id = i;
+                    }
+                }
+                string result;
+                if (flag)
+                {
+                    result = server_id.ToString() + r.ToString();
+                }
+                else
+                {
+                    result = Convert.ToBase64String(Encoding.Default.GetBytes(server_url)) + "!" + Convert.ToBase64String(Encoding.Default.GetBytes(r.ToString()));
+                }
                 Thread thr = new Thread(new ThreadStart(() => Clipboard.SetText(result)));
                 thr.SetApartmentState(ApartmentState.STA);
                 thr.IsBackground = true;
@@ -1901,19 +1922,30 @@ namespace OMCL_DLL.Tools
                     p.Kill();
                 }
                 catch { }
-                LinkProcess.Remove(p);
             }
+            LinkProcess = new List<Process>();
         }
         public static Server JoinLink(string code)
         {
             try
             {
                 string[] sp = code.Split('!');
-                return new Server
+                if (sp.Length == 1)
                 {
-                    server_url_or_ip = Encoding.Default.GetString(Convert.FromBase64String(sp[0])),
-                    server_port = int.Parse(Encoding.Default.GetString(Convert.FromBase64String(sp[1]))),
-                };
+                    return new Server
+                    {
+                        server_url_or_ip = servers[int.Parse(sp[0][0].ToString())],
+                        server_port = int.Parse(sp[0].Remove(0,1)),// int.Parse(sp[0].Replace(sp[0][0].ToString(),"")),
+                    };
+                }
+                else
+                {
+                    return new Server
+                    {
+                        server_url_or_ip = Encoding.Default.GetString(Convert.FromBase64String(sp[0])),
+                        server_port = int.Parse(Encoding.Default.GetString(Convert.FromBase64String(sp[1]))),
+                    };
+                }
             }
             catch (Exception e)
             {

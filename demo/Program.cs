@@ -98,10 +98,10 @@ namespace demo
             //InstallMinecraft.MinecraftInstall.InstallMinecraftVersion("rd-132211", "rd-132211", false, false);
             //InstallMinecraft.MinecraftInstall.InstallMinecraftVersion("1.6", "1.6", false, false);
             //InstallMinecraft.MinecraftInstall.InstallMinecraftVersion("1.8", "1.8", true, true);
-            Tools.DownloadMissAsstes("1.1");
+            /*Tools.DownloadMissAsstes("1.1");
             Tools.LaunchMinecraft launch = new Tools.LaunchMinecraft();
             launch.OnMinecraftCrash += Launch_OnMinecraftCrash;
-            launch.LaunchGame(@"C:\Program Files\Java\jre1.8.0_331\bin\java.exe", "1.1", "AAA");
+            launch.LaunchGame(@"C:\Program Files\Java\jre1.8.0_331\bin\java.exe", "1.1", "AAA");*/
 
             /*
             Tools.MaxMem = 4096;
@@ -112,7 +112,7 @@ namespace demo
 
 
             //联机
-            /*Console.WriteLine("[0]加入一个联机");
+            Console.WriteLine("[0]加入一个联机");
             Console.WriteLine("[1]开启一个联机");
             Console.WriteLine("[2]关闭联机");
             Console.Write("请选择：");
@@ -126,7 +126,7 @@ namespace demo
             else if (con == "1")
             {
                 Console.Write("请启动一个Minecraft，并在Minecraft中进入一个单人游戏存档，然后选择<在局域网开放>，将聊天框中的数字（端口号）输入：");
-                Console.WriteLine("这是您的联机码，将其发送给您的好友，畅快联机吧：" + Link.StartLink(int.Parse(Console.ReadLine())));
+                Console.WriteLine("这是您的联机码，将其发送给您的好友，畅快联机吧：" + Link.StartLink(int.Parse(Console.ReadLine()), 1));
                 Console.WriteLine("联机已经开启，按enter键结束联机！");
                 Console.ReadLine();
                 Link.StopLink();
@@ -134,7 +134,7 @@ namespace demo
             else if (con == "2")
             {
                 Link.StopLink();
-            }*/
+            }
         }
 
         /*private static void MicrosoftLogin2_oauth2_OnGetCode(string code)

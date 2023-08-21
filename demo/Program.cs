@@ -126,7 +126,7 @@ namespace demo
             else if (con == "1")
             {
                 Console.Write("请启动一个Minecraft，并在Minecraft中进入一个单人游戏存档，然后选择<在局域网开放>，将聊天框中的数字（端口号）输入：");
-                Console.WriteLine("这是您的联机码，将其发送给您的好友，畅快联机吧：" + Link.StartLink(int.Parse(Console.ReadLine()), 1));
+                Console.WriteLine("这是您的联机码，将其发送给您的好友，畅快联机吧：" + Link.StartLink(int.Parse(Console.ReadLine())));
                 Console.WriteLine("联机已经开启，按enter键结束联机！");
                 Console.ReadLine();
                 Link.StopLink();

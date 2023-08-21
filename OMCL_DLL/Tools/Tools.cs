@@ -1786,10 +1786,36 @@ namespace OMCL_DLL.Tools
     public class Link
     {
         public static List<Process> LinkProcess = new List<Process>();
-        public static readonly string[] servers = { "la.afrps.cn", "frp.104300.xyz" };
-        public static readonly string[] server_tokens = { "afrps.cn", "www.126126.xyz" };
-        public static string FrpcIni = "[common]\nserver_addr = {server_url}\nserver_port = {server_port}\ntoken = {server_token}\n[{link_name}]\ntype = tcp\nlocal_ip = 127.0.0.1\nlocal_port = {client_port}\nremote_port = {random_num}";
-        public static string StartLink(int client_port, int server_id = 0)
+        public static readonly string[] servers = { "frp.104300.xyz", "la.afrps.cn" };
+        public static readonly string[] server_tokens = { "www.126126.xyz", "afrps.cn" };
+        public static string FrpcIni = "[common]\nserver_addr = {server_url}\nserver_port = {server_port}\ntoken = {server_token}\n\n[{link_name}]\ntype = tcp\nlocal_ip = 127.0.0.1\nlocal_port = {client_port}\nremote_port = {random_num}";
+        public static string StartLink(int client_port)
+        {
+            int ser = 0;
+            long pingms = 10005;
+            for (int i = 0; i < servers.Length; i++)
+            {
+                PingReply reply;
+                try
+                {
+                    reply = new Ping().Send(servers[i], (int)pingms);
+                }
+                catch
+                {
+                    reply = null;
+                }
+                if (reply != null)
+                {
+                    if (reply.RoundtripTime < pingms)
+                    {
+                        pingms = reply.RoundtripTime;
+                        ser = i;
+                    }
+                }
+            }
+            return StartLink(client_port, ser);
+        }
+        public static string StartLink(int client_port, int server_id)
         {
             return StartLink(client_port, servers[server_id], 7000, server_tokens[server_id]);
         }
@@ -1877,6 +1903,11 @@ namespace OMCL_DLL.Tools
                         throw new Exception("错误：启动内网穿透（frpc.exe）服务时出现问题！请检查！");
                     }
                 }
+                try
+                {
+                    File.Delete(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.ini" }));
+                }
+                catch { }
                 bool flag = false;
                 int server_id = -1;
                 for (int i = 0;i < servers.Length;i++)

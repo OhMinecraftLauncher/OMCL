@@ -1,0 +1,246 @@
+﻿//废弃：WinDivert
+
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+using WinDivert;
+
+namespace WLANPackageGet
+{
+    internal class Program
+    {
+        //废弃：ChatGPT
+        /*static class WinDivertInterop
+        {
+            // 导入 WinDivert 库的函数声明
+            [DllImport("WinDivert.dll")]
+            public static extern IntPtr WinDivertOpen(string filter, uint layer, short priority, uint flags);
+
+            [DllImport("WinDivert.dll")]
+            public static extern bool WinDivertRecv(IntPtr handle, IntPtr pPacket, uint packetLen, out uint recvLen, IntPtr addr);
+
+            [DllImport("WinDivert.dll")]
+            public static extern bool WinDivertSend(IntPtr handle, IntPtr pPacket, uint packetLen, out uint sendLen, IntPtr addr);
+
+            [DllImport("WinDivert.dll")]
+            public static extern bool WinDivertClose(IntPtr handle);
+        }*/
+
+        static void Main(string[] args)
+        {
+            // 打开 WinDivert 句柄
+            IntPtr handle = WinDivertNative.WinDivertOpen("true", WinDivertNative.WinDivertLayer.Network, 0, 0);
+
+            int err = Marshal.GetLastWin32Error();
+            if (err != 0 || handle == IntPtr.Zero)
+            {
+                Console.WriteLine("无法打开 WinDivert 句柄：" + err);
+                return;
+            }
+
+            try
+            {
+                IntPtr pBuffer = Marshal.AllocHGlobal(65536); // 用于存储数据包的缓冲区
+
+                while (true)
+                {
+                    // 接收一个数据包
+                    if (WinDivertNative.WinDivertRecv(handle, pBuffer, 65536, out uint packetLen, out WinDivertNative.Address.WINDIVERT_ADDRESS pAddr))
+                    {
+                        byte[] bytes = new byte[packetLen];
+                        Marshal.Copy(pBuffer, bytes, 0, (int)packetLen);
+                        for (int i = 0; i < bytes.Length; i++)
+                        {
+                            //Console.Write(((int)bytes[i]).ToString("X") + " ");
+                            Console.Write((bytes[i] >= 33 && bytes[i] <= 126) ? Encoding.ASCII.GetString(new byte[1] { bytes[i] }) : ".");
+                        }
+                        Console.WriteLine();
+                        Console.WriteLine(pAddr.Network.IfIdx);
+                        Console.WriteLine();
+                        WinDivertNative.WinDivertSend(handle, pBuffer, packetLen, out _, ref pAddr);
+                        // 在此处对接收到的数据包进行处理
+                        // 您可以打印、修改或丢弃数据包
+
+                        // 如果不想发送数据包，可以直接跳过将其发送出去的步骤
+
+                        continue;
+                    }
+
+                    Console.WriteLine("无法接收数据包：{0}", Marshal.GetLastWin32Error());
+                    break;
+                }
+
+                // 释放缓冲区内存
+                Marshal.FreeHGlobal(pBuffer);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e);
+            }
+            finally
+            {
+                // 关闭 WinDivert 句柄
+                WinDivertNative.WinDivertClose(handle);
+            }
+
+            //废弃：SharpPcap
+            /*for (int i = 0; i < CaptureDeviceList.Instance.Count; i++)
+            {
+                string[] sps = CaptureDeviceList.Instance[i].ToString().Split('\n');
+                for (int j = 0; j < sps.Length; j++)
+                {
+                    if (sps[j].Contains("FriendlyName: "))
+                    {
+                        Console.WriteLine($"[{i}] " + sps[j].Replace("FriendlyName: ", ""));
+                    }
+                }
+            }
+            string con = Console.ReadLine();
+            int num = int.Parse(con);
+
+            ICaptureDevice device = CaptureDeviceList.Instance[num];
+
+            device.OnPacketArrival += Device_OnPacketArrival;
+
+            device.Open(DeviceMode.Promiscuous);
+
+            device.StartCapture();
+
+            while (true) ;*/
+        }
+
+        //废弃：SharpPcap 4.1.0
+        /*
+        private static void Device_OnPacketArrival(object sender, CaptureEventArgs e)
+        {
+            RawCapture capture = e.Packet;
+            Packet packet = Packet.ParsePacket(capture.LinkLayerType, capture.Data);
+            IpPacket ippacket = IpPacket.GetEncapsulated(packet);
+            if (ippacket != null)
+            {
+                TcpPacket tcpPacket = TcpPacket.GetEncapsulated(packet);
+                UdpPacket udpPacket = UdpPacket.GetEncapsulated(packet);
+                if (tcpPacket != null)
+                {
+                    Console.WriteLine("协议：Tcp");
+                    Console.WriteLine("源地址：" + ippacket.SourceAddress.ToString() + " [" + tcpPacket.SourcePort.ToString() + ']');
+                    Console.WriteLine("目标地址：" + ippacket.DestinationAddress.ToString() + " [" + tcpPacket.DestinationPort.ToString() + ']');
+                }
+                else if (udpPacket != null)
+                {
+                    Console.WriteLine("协议：Udp");
+                    Console.WriteLine("源地址：" + ippacket.SourceAddress.ToString() + " [" + udpPacket.SourcePort.ToString() + ']');
+                    Console.WriteLine("目标地址：" + ippacket.DestinationAddress.ToString() + " [" + udpPacket.DestinationPort.ToString() + ']');
+                }
+                else
+                {
+                    Console.WriteLine("协议：Ip");
+                    Console.WriteLine("源地址：" + ippacket.SourceAddress.ToString());
+                    Console.WriteLine("目标地址：" + ippacket.DestinationAddress.ToString());
+                }
+                byte[] bytes = ippacket.BytesHighPerformance.Bytes;
+                Console.Write("报文信息：");
+                for (int i = 0;i < bytes.Length;i++)
+                {
+                    Console.Write((bytes[i] >= 33 && bytes[i] <= 126) ? Encoding.ASCII.GetString(new byte[1] { bytes[i] }) : ".");
+                }
+                Console.WriteLine();
+                bool flag_s = false;
+                bool flag_d = false;
+                ReadOnlyCollection<PcapAddress> ans = ((WinPcapDevice)e.Device).Addresses;
+                foreach (PcapAddress an in ans)
+                {
+                    if (an != null && an.Addr != null && an.Addr.ipAddress != null)
+                    {
+                        if (ippacket.SourceAddress.ToString() == an.Addr.ipAddress.ToString())
+                        {
+                            flag_s = true;
+                        }
+                        if (ippacket.DestinationAddress.ToString() == an.Addr.ipAddress.ToString())
+                        {
+                            flag_d = true;
+                        }
+                    }
+                }
+                if (flag_s)
+                {
+                    Console.WriteLine("方向：发出");
+                }
+                else if (flag_d)
+                {
+                    Console.WriteLine("方向：收入");
+                }
+                else
+                {
+                    Console.WriteLine("方向：未知");
+                }
+            }
+            Console.WriteLine();
+        }
+        */
+
+        //废弃：SharpPcap新版本
+        /*private static void Program_OnPacketArrival(object sender, PacketCapture e)
+        {
+            try
+            {
+                RawCapture capture = e.GetPacket();
+                Packet packet = Packet.ParsePacket(capture.LinkLayerType, capture.Data);
+                TcpPacket tcp = (TcpPacket)packet;
+                IpPacket iPPacket = (IpPacket)packet;
+                Console.WriteLine("源地址：" + iPPacket.SourceAddress);
+                Console.WriteLine("目标地址" + iPPacket.DestinationAddress);
+                Console.WriteLine();
+                //Console.WriteLine(Encoding.Default.GetString(packet.BytesSegment.ActualBytes()));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+            }
+        }*/
+    }
+}
+
+
+/*
+using System;
+using System.Collections.Generic;
+using PcapDotNet.Core;
+using PcapDotNet.Packets;
+using PcapDotNet.Packets.Ethernet;
+using PcapDotNet.Packets.IpV4;
+using PcapDotNet.Packets.Transport;
+
+class PacketInterceptor
+{
+    static void Main(string[] args)
+    {
+        // 打开网络适配器
+        IList<LivePacketDevice> devices = LivePacketDevice.AllLocalMachine;
+        if (devices.Count < 1)
+        {
+            Console.WriteLine("找不到可用的网络适配器。");
+            return;
+        }
+
+        PacketDevice selectedDevice = devices[0];
+        using (PacketCommunicator communicator =
+            selectedDevice.Open(65536, PacketDeviceOpenAttributes.Promiscuous, 1000))
+        {
+            // 设置过滤规则（可选）
+            string filter = "tcp and port 80";
+            communicator.SetFilter(filter);
+
+            Console.WriteLine("开始拦截数据包...");
+
+            // 捕获数据包
+            communicator.ReceivePackets(0, PacketHandler);
+        }
+    }
+
+    private static void PacketHandler(Packet packet)
+    {
+
+    }
+}
+*/

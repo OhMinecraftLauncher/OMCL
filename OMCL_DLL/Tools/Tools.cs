@@ -13,6 +13,8 @@ using System.IO;
 using System.Linq;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Security.Policy;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -2275,7 +2277,7 @@ namespace OMCL_DLL.Tools
                     return new OfflineLoginResult
                     {
                         name = name,
-                        uuid = RandomUUID(),
+                        uuid = MD5UUID(name),
                     };
                 }
                 else
@@ -2293,12 +2295,14 @@ namespace OMCL_DLL.Tools
                 return new OfflineLoginResult
                 {
                     name = name,
-                    uuid = RandomUUID(),
+                    uuid = MD5UUID(name),
                 };
             }
         }
-        private static string RandomUUID()
+        private static string MD5UUID(string name)
         {
+            /*
+            //Cause by RandomUUID
             string result = "";
             char[] canuse = { '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', 'a', 'b', 'c', 'd', 'e', 'f' };
             while (true)
@@ -2308,6 +2312,11 @@ namespace OMCL_DLL.Tools
                 result += canuse[random.Next(0, 17)];
             }
             return result;
+            */
+            using (MD5 md5 = MD5.Create())
+            {
+                return new Guid(md5.ComputeHash(Encoding.Default.GetBytes(name))).ToString().Replace("-", "");
+            }
         }
     }
     public class InstallMinecraft

@@ -2,6 +2,8 @@
 using OMCL_DLL.Tools.Login.MicrosoftLogin;
 using OMCL_DLL.Tools.Login.Result;
 using System;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -110,8 +112,9 @@ namespace demo
             CrashMessage crashMessage = Tools.LaunchGame("C:\\Program Files\\Java\\jre1.8.0_331\\bin\\java.exe", "1.12.2-Forge-Computer", "A", "A", "A");
             */
 
-
+            Console.WriteLine(GetLogin.OfflineLogin("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaahbbbbbbbbbbbbbbbbbbbbbbbbbbbthdhddrhdgfhdfg").uuid); //918c59deab31be5bda9a153fc57e7582
             //联机
+            /*
             Console.WriteLine("[0]加入一个联机");
             Console.WriteLine("[1]开启一个联机");
             Console.WriteLine("[2]关闭联机");
@@ -135,6 +138,7 @@ namespace demo
             {
                 Link.StopLink();
             }
+            */
         }
 
         /*private static void MicrosoftLogin2_oauth2_OnGetCode(string code)

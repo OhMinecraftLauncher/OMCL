@@ -56,6 +56,8 @@
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
     <Compile Include="Tools\DownloadFile.cs" />
+    <Compile Include="Tools\Local\Class.cs" />
+    <Compile Include="Tools\Local\Enum.cs" />
     <Compile Include="Tools\Login\LoginResult.cs" />
     <Compile Include="Tools\Login\MicrosoftLogin\MicrosoftLogin.cs" />
     <Compile Include="Tools\Login\MicrosoftLogin\MicrosoftLogin2_oauth2.cs" />
@@ -66,7 +68,7 @@
       <DependentUpon>MicrosoftLogin.cs</DependentUpon>
     </Compile>
     <Compile Include="Tools\Login\Web.cs" />
-    <Compile Include="_LocalDo\OMCLException.cs" />
+    <Compile Include="__LocalDo__\OMCLException.cs" />
     <Compile Include="Tools\Tools.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

@@ -24,67 +24,6 @@ using Path = System.IO.Path;
 
 namespace OMCL_DLL.Tools
 {
-    public class Version
-    {
-        public string[] libraries { get; internal set; }
-        public string[] natives { get; internal set; }
-        public string mainClass { get; internal set; }
-        public Argument[] arguments { get; internal set; }
-        public string assets { get; internal set; }
-        public string jvm { get; internal set; }
-    }
-    public class Argument
-    {
-        public string name { get; internal set; }
-        public string value { get; internal set; }
-    }
-    public class JavaVersion
-    {
-        public JavaType type { get; internal set; }
-        public string path { get; internal set; }
-    }
-    public class CrashMessage
-    {
-        public string Message { get; internal set; }
-        public int ExitCode { get; internal set; }
-        public string VersionName { get; internal set; }
-        public string Solution { get; internal set; }
-    }
-    public class ModInfo
-    {
-        public string IdNamespace { get; internal set; }
-        public string FileName { get; internal set; }
-    }
-    public class FindOutDir
-    {
-        public string path { get; internal set; }
-        public string PathinGet { get; internal set; }
-    }
-    public class FindOutFile
-    {
-        public string path_and_filename { get; internal set; }
-        public string PathinGet { get; internal set; }
-    }
-    public class Server
-    {
-        public string server_url_or_ip { get; internal set; }
-        public int server_port { get; internal set; }
-    }
-    public enum DownloadSource
-    {
-        BMCLAPI, MCBBS,
-    }
-    public enum JavaType
-    {
-        jre, jdk, unknown
-    }
-    public class JavaComp: IComparer<JavaVersion>
-    {
-        public int Compare(JavaVersion a, JavaVersion b)
-        {
-            return a.type.CompareTo(b.type);
-        }
-    }
     public class Tools
     {
         public static string DownloadMinecraftFileUrl = "https://bmclapi2.bangbang93.com/";
@@ -1113,7 +1052,7 @@ namespace OMCL_DLL.Tools
                     playerName = result.name;
                     uuid = result.uuid;
                     token = result.access_token;
-                    LaunchGame(java, version, playerName, uuid, token);
+                    LaunchGame(java, version, playerName, uuid, token, LoginType.Microsoft);
                     return;
                 }
                 catch (Exception e)
@@ -1157,7 +1096,7 @@ namespace OMCL_DLL.Tools
             /// <param name="playerName">玩家名称</param>
             /// <param name="uuid">玩家uuid</param>
             /// <param name="token">玩家登录的access_token</param>
-            public void LaunchGame(string java, string version, string playerName, string uuid, string token)
+            public void LaunchGame(string java, string version, string playerName, string uuid, string token, LoginType loginType = LoginType.Other)
             {
                 try
                 {
@@ -1231,7 +1170,14 @@ namespace OMCL_DLL.Tools
                                 GameCMD += token + ' ';
                                 break;
                             case "${user_type}":
-                                GameCMD += "mojang" + ' ';
+                                if (loginType == LoginType.Microsoft)
+                                {
+                                    GameCMD += "msa" + ' ';
+                                }
+                                else
+                                {
+                                    GameCMD += "mojang" + ' ';
+                                }
                                 break;
                             case "${version_type}":
                                 GameCMD += "\"OMCL " + OMCLver + "\" ";

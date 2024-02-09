@@ -24,6 +24,7 @@ namespace OMCL_DLL.Tools
     {
         public JavaType type { get; internal set; }
         public string path { get; internal set; }
+        public string version { get; internal set; }
     }
     public class CrashMessage
     {

@@ -59,25 +59,5 @@ namespace OMCL_DLL.Properties {
                 resourceCulture = value;
             }
         }
-        
-        /// <summary>
-        ///   查找 System.Byte[] 类型的本地化资源。
-        /// </summary>
-        internal static byte[] link_frpc {
-            get {
-                object obj = ResourceManager.GetObject("link_frpc", resourceCulture);
-                return ((byte[])(obj));
-            }
-        }
-        
-        /// <summary>
-        ///   查找 System.Byte[] 类型的本地化资源。
-        /// </summary>
-        internal static byte[] link_LICENSE {
-            get {
-                object obj = ResourceManager.GetObject("link_LICENSE", resourceCulture);
-                return ((byte[])(obj));
-            }
-        }
     }
 }

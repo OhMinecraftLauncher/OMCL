@@ -1,17 +1,19 @@
 ﻿using Newtonsoft.Json.Linq;
-using OMCL_DLL.Tools.Login.MicrosoftLogin.UI;
 using OMCL_DLL.Tools.Login.Result;
 using System;
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Controls;
 using System.Windows.Forms;
+using OMCL_DLL.Tools.LocalException;
 
 namespace OMCL_DLL.Tools.Login.MicrosoftLogin
 {
     internal class MicrosoftLogin
     {
+        /*
         private static TaskCompletionSource<bool> tcs = new TaskCompletionSource<bool>();
         [STAThread]
         public static void Start()
@@ -22,11 +24,15 @@ namespace OMCL_DLL.Tools.Login.MicrosoftLogin
             tcs.SetResult(true);
         }
         [STAThread]
-        public static async Task<MicrosoftLoginResult> LoginAsync(bool IsAuto)
+        */
+        public static void OpenLoginUrl(bool IsAuto)
         {
-            if (IsAuto) UI.MicrosoftLogin.url = "https://login.live.com/oauth20_authorize.srf?client_id=00000000402b5328&response_type=code&scope=service%3A%3Auser.auth.xboxlive.com%3A%3AMBI_SSL&redirect_uri=https%3A%2F%2Flogin.live.com%2Foauth20_desktop.srf";
-            else UI.MicrosoftLogin.url = "https://login.live.com/oauth20_authorize.srf?client_id=00000000402b5328&scope=service%3a%3auser.auth.xboxlive.com%3a%3aMBI_SSL&redirect_uri=https%3a%2f%2flogin.live.com%2foauth20_desktop.srf&response_type=code&prompt=login&uaid=057b3be0fc6a4324adfa39149843f54e&msproxy=1&issuer=mso&tenant=consumers&ui_locales=zh-CN#";
-            OMCLLog.WriteLog("[MicrosoftLogin_Login]登录开始，自动登录：" + IsAuto.ToString() + "，将请求Url：" + UI.MicrosoftLogin.url + "。", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
+            string url;
+            if (IsAuto) url = "https://login.live.com/oauth20_authorize.srf?client_id=00000000402b5328&response_type=code&scope=service%3A%3Auser.auth.xboxlive.com%3A%3AMBI_SSL&redirect_uri=https%3A%2F%2Flogin.live.com%2Foauth20_desktop.srf";
+            else url = "https://login.live.com/oauth20_authorize.srf?client_id=00000000402b5328&scope=service%3a%3auser.auth.xboxlive.com%3a%3aMBI_SSL&redirect_uri=https%3a%2f%2flogin.live.com%2foauth20_desktop.srf&response_type=code&prompt=login&uaid=057b3be0fc6a4324adfa39149843f54e&msproxy=1&issuer=mso&tenant=consumers&ui_locales=zh-CN#";
+            OMCLLog.WriteLog("[MicrosoftLogin_Login]登录开始，自动登录：" + IsAuto.ToString() + "，将请求Url：" + url + "。", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
+            Process.Start(url);
+            /*
             Thread thd = new Thread(new ThreadStart(Start));
             thd.SetApartmentState(ApartmentState.STA);
             thd.IsBackground = true;
@@ -56,7 +62,7 @@ namespace OMCL_DLL.Tools.Login.MicrosoftLogin
                 catch
                 {
                     OMCLLog.WriteLog("[Login_MicrosoftLogin]错误：登录时出现错误，请确认你的网络正常且你已经拥有Minecraft！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                    throw new Exception("登录时出现错误！");
+                    throw new OMCLException("登录时出现错误！", e);
                 }
             }
             else if (UI.MicrosoftLogin.IsOnWebSite)
@@ -68,8 +74,9 @@ namespace OMCL_DLL.Tools.Login.MicrosoftLogin
                 OMCLLog.WriteLog("[Login_MicrosoftLogin]错误：用户取消登录！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
                 return null;
             }
+            */
         }
-        public static MicrosoftLoginResult LoginByWebSite(string url)
+        public static MicrosoftLoginResult Login(string url)
         {
             try
             {
@@ -90,10 +97,10 @@ namespace OMCL_DLL.Tools.Login.MicrosoftLogin
                 };
                 return loginResult;
             }
-            catch
+            catch (Exception e)
             {
                 OMCLLog.WriteLog("[Login_MicrosoftLogin]错误：登录时出现错误，请确认你的网络正常且你已经拥有Minecraft，或请确认你输入的网址正确！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                throw new Exception("错误：登录时出现错误！请确认你的网络正常且你已经拥有Minecraft，或请确认你输入的网址正确！");
+                throw new OMCLException("错误：登录时出现错误！请确认你的网络正常且你已经拥有Minecraft，或请确认你输入的网址正确！", e);
             }
         }
         public static MicrosoftLoginResult RefreshLogin(MicrosoftLoginResult login)

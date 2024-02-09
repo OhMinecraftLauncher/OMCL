@@ -1,5 +1,4 @@
 ﻿using Newtonsoft.Json.Linq;
-using OMCL_DLL.Tools.Login.MicrosoftLogin.UI;
 using OMCL_DLL.Tools.Login.Result;
 using System;
 using System.Diagnostics;
@@ -10,6 +9,7 @@ using System.Security.Policy;
 using System.Text;
 using System.Threading;
 using System.Windows;
+using OMCL_DLL.Tools.LocalException;
 
 namespace OMCL_DLL.Tools.Login.MicrosoftLogin
 {
@@ -33,16 +33,18 @@ namespace OMCL_DLL.Tools.Login.MicrosoftLogin
                 OnGetCode(user_code);
             }
             catch { }
+            /*
             UI.MicrosoftLogin.url = "https://www.microsoft.com/link";
             Thread thd = new Thread(new ThreadStart(MicrosoftLogin.Start));
             thd.SetApartmentState(ApartmentState.STA);
             thd.IsBackground = true;
             thd.Start();
+            */
+            Process.Start("https://www.microsoft.com/link/");
             string dc = (string)o.SelectToken("device_code");
             while (true)
             {
                 if (IsC) break;
-                if (UI.MicrosoftLogin.IsClose && !UI.MicrosoftLogin.IsOnWebSite) break;
                 Thread.Sleep(5000);
                 string result = "";
                 HttpWebRequest req = (HttpWebRequest)WebRequest.Create("https://login.microsoftonline.com/consumers/oauth2/v2.0/token");
@@ -67,7 +69,7 @@ namespace OMCL_DLL.Tools.Login.MicrosoftLogin
                 catch (Exception e)
                 {
                     OMCLLog.WriteLog("[Login_Web_POST]出现错误：" + e, OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                    throw new Exception("错误：登录时出现错误，POST时出现错误！");
+                    throw new OMCLException("错误：登录时出现错误，POST时出现错误！", e);
                 }
                 Stream stream = resp.GetResponseStream();
                 using (StreamReader reader = new StreamReader(stream, Encoding.UTF8))
@@ -82,8 +84,6 @@ namespace OMCL_DLL.Tools.Login.MicrosoftLogin
                     {
                         string access_token = (string)o.SelectToken("access_token");
                         string refresh_token = (string)o.SelectToken("refresh_token");
-                        Console.WriteLine(access_token);
-                        Console.WriteLine(refresh_token);
                         MicrosoftLoginResult lresult = MicrosoftLogin.GetLoginMessage(access_token, true);
                         lresult.refresh_token = refresh_token;
                         return lresult;
@@ -101,13 +101,13 @@ namespace OMCL_DLL.Tools.Login.MicrosoftLogin
                         case "authorization_pending":
                             continue;
                         case "authorization_declined":
-                            throw new Exception("用户取消登录！");
+                            throw new OMCLException("用户取消登录！");
                         case "bad_verification_code":
-                            throw new Exception("验证失败，请重新尝试登录！");
+                            throw new OMCLException("验证失败，请重新尝试登录！");
                         case "expired_token":
-                            throw new Exception("登录超时，请尝试重新登录！");
+                            throw new OMCLException("登录超时，请尝试重新登录！");
                         default:
-                            throw new Exception("错误：登录时出现未知错误，请检查并尝试重新登录！");
+                            throw new OMCLException("错误：登录时出现未知错误，请检查并尝试重新登录！");
                     }
                 }
             }

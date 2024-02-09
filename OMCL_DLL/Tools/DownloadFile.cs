@@ -2,6 +2,7 @@
 using System.IO;
 using System.Net;
 using System.Threading;
+using OMCL_DLL.Tools.LocalException;
 
 namespace OMCL_DLL.Tools.Download
 {
@@ -64,7 +65,7 @@ namespace OMCL_DLL.Tools.Download
                 {
                     fs.Close();
                     OMCLLog.WriteLog("[DownloadFile_Receive]" + @e.Message, OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                    throw new Exception("下载文件时出现错误！");
+                    throw new OMCLException("下载文件时出现错误！", e);
                 }
                 //Console.WriteLine("进程" + threadh.ToString() + "接收完毕!");
                 threadw[threadh] = true;
@@ -72,7 +73,7 @@ namespace OMCL_DLL.Tools.Download
             catch (Exception e)
             {
                 OMCLLog.WriteLog("[DownloadFile_Receive]" + @e.Message, OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                throw new Exception("下载文件时出现错误！");
+                throw new OMCLException("下载文件时出现错误！", e);
             }
         }
         public static void Start(int _thread, string url, string path)
@@ -84,7 +85,7 @@ namespace OMCL_DLL.Tools.Download
                 if (TryNum == 0) OMCLLog.WriteLog("[DownloadFile_Start]开始下载文件：" + strurl + "，保存位置：" + path + "，线程数：" + _thread + "个。", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
                 HttpWebRequest request;
                 long filesize = 0;
-                request = (HttpWebRequest)HttpWebRequest.Create(strurl);
+                request = (HttpWebRequest)WebRequest.Create(strurl);
                 filesize = request.GetResponse().ContentLength;//取得目标文件的长度  
                 request.Abort();
                 // 接收线程数  
@@ -133,7 +134,7 @@ namespace OMCL_DLL.Tools.Download
                     TryNum = 0;
                     OMCLLog.WriteLog("[DownloadFile_Start]请求下载文件时出现错误：" + @e.Message, OMCLExceptionClass.DLL, OMCLExceptionType.Error);
                     OMCLLog.WriteLog("已达到重试次数上限：" + CanTry + "次！", OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
-                    throw new Exception("下载失败！" + e.Message);
+                    throw new OMCLException("下载失败！" + e.Message, e);
                 }
                 else
                 {
@@ -198,7 +199,7 @@ namespace OMCL_DLL.Tools.Download
             catch (Exception e)
             {
                 OMCLLog.WriteLog("[DownloadFile_hbfile]多线程下载出现错误，合并文件时出现错误：" + @e.Message, OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                throw new Exception("下载文件时出现错误！");
+                throw new OMCLException("下载文件时出现错误！", e);
             }
         }
     }

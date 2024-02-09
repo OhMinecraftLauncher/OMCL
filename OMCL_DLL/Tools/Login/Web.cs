@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Net;
 using System.Text;
+using OMCL_DLL.Tools.LocalException;
 
 namespace OMCL_DLL.Tools.Login.Web
 {
@@ -46,7 +47,7 @@ namespace OMCL_DLL.Tools.Login.Web
             catch (Exception e)
             {
                 OMCLLog.WriteLog("[Login_Web_POST]出现错误：" + e, OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                throw e;
+                throw new OMCLException("Post时出现错误！", e);
             }
         }
         internal static string Get(string url, string Header = null)
@@ -73,7 +74,7 @@ namespace OMCL_DLL.Tools.Login.Web
             catch (Exception e)
             {
                 OMCLLog.WriteLog("[Login_Web_GET]出现错误：" + e, OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                throw new Exception("Get时出现错误！");
+                throw new OMCLException("Get时出现错误！", e);
             }
         }
     }

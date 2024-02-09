@@ -1,7 +1,13 @@
 ﻿using OMCL_DLL.Tools;
+using OMCL_DLL.Tools.LocalException;
 using OMCL_DLL.Tools.Login.MicrosoftLogin;
 using OMCL_DLL.Tools.Login.Result;
 using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.Diagnostics;
+using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
@@ -11,8 +17,8 @@ namespace demo
 {
     internal class Program
     {
-        //static async Task Main(string[] args)
-        static void Main(string[] args)
+        static async Task Main(string[] args)
+        //static void Main(string[] args)
         {
             /*
             //（循环）清理内存
@@ -55,29 +61,14 @@ namespace demo
             }
             catch (NotAnException)
             {
-                Console.Write("请输入网页返回后的url，什么都不输入则取消：");
-                string result = Console.ReadLine();
-                if (result == "" || result == null)
-                {
-                    Console.WriteLine("用户取消登录！");
-                    return;
-                }
-                MicrosoftLoginResult login = GetLogin.MicrosoftLogin.LoginByWebSite(result);
-                if (login == null)
-                {
-                    Console.WriteLine("错误的url！");
-                    return;
-                }
-                Console.WriteLine(login.name);
-                Console.WriteLine(login.uuid);
-                Console.WriteLine(login.refresh_token);
-                Console.WriteLine(login.access_token);
+                
                 Tools.LaunchMinecraft launch = new Tools.LaunchMinecraft();
                 launch.LaunchGame("C:\\Program Files\\Java\\jre1.8.0_331\\bin\\javaw.exe", "1.15", login, out _);
             }*/
             /*Tools.LaunchMinecraft launch = new Tools.LaunchMinecraft();
             launch.LaunchGame("C:\\Program Files\\Java\\jre1.8.0_331\\bin\\javaw.exe", "1.15", "Ocean");*/
-            /*GetLogin.MicrosoftLogin.oauth2_OnGetCode += MicrosoftLogin2_oauth2_OnGetCode;
+            /*
+            GetLogin.MicrosoftLogin.oauth2_OnGetCode += MicrosoftLogin2_oauth2_OnGetCode;
             MicrosoftLoginResult result = GetLogin.MicrosoftLogin.DCLogin();
             if (result == null)
             {
@@ -87,15 +78,52 @@ namespace demo
             Console.WriteLine(result.name);
             Console.WriteLine(result.uuid);
             Console.WriteLine(result.access_token);
-            Console.WriteLine(result.refresh_token);*/
+            Console.WriteLine(result.refresh_token);
+            */
+            /*
+            GetLogin.MicrosoftLogin.NewLogin.OpenLoginUrl(false);
+            Console.Write("请输入网页返回后的url，什么都不输入则取消：");
+            string result = Console.ReadLine();
+            if (result == "" || result == null)
+            {
+                Console.WriteLine("用户取消登录！");
+                return;
+            }
+            MicrosoftLoginResult login = GetLogin.MicrosoftLogin.NewLogin.LoginByCode(result);
+            if (login == null)
+            {
+                Console.WriteLine("错误的url！");
+                return;
+            }
+            Console.WriteLine(login.name);
+            Console.WriteLine(login.uuid);
+            Console.WriteLine(login.refresh_token);
+            Console.WriteLine(login.access_token);
+            */
             /*CrashMessage crashMessage = Tools.LaunchGame("C:\\Program Files\\Java\\jre1.8.0_331\\bin\\java.exe", "1.16.5-demo-Forge", loginResult, out _);
             if (crashMessage == null) return;
             Console.WriteLine(crashMessage.Message);
             Console.WriteLine("可能的解决方法：\n" + crashMessage.Solution);
             Console.WriteLine("\n\n详细信息：\n退出代码：" + crashMessage.ExitCode + "\n版本名称：" + crashMessage.VersionName);*/
-            /*InstallMinecraft.ForgeInstall.InstallForge(@"C:\Program Files\Java\jre1.8.0_331\bin\javaw.exe", "1.16.5-1-Forge", @"C:\Users\麻熠洋\Desktop\forge-1.16.5-36.2.39-installer.jar");
-            Tools.DownloadMissFiles("1.16.5-1-Forge", false);
-            Console.WriteLine("Forge安装成功！");*/
+            //InstallMinecraft.MinecraftInstall.InstallMinecraftVersion("1.8.9", "1.8.9");
+            //InstallMinecraft.ForgeInstall.InstallForge("1.8.9", @"C:\Program Files\Java\jre1.8.0_331\bin\javaw.exe", @"C:\Users\麻熠洋\Desktop\Forge\forge-1.8.9-11.15.1.2318-1.8.9-installer.jar");
+            /*Console.WriteLine(Tools.Dir);
+            Tools.LaunchMinecraft launch = new Tools.LaunchMinecraft();
+            launch.OnMinecraftCrash += Launch_OnMinecraftCrash;
+            launch.LaunchGame(@"C:\Program Files\Java\jre1.8.0_331\bin\javaw.exe", "1.8.9", "AAA");*/
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+            JavaVersion[] javas = await Tools.FindJava.GetJavas();
+            //string[] s = (await Tools.FDTools.SearchFoldersInDrivers(null, "|bin", "javaw.exe")).ToArray();
+            //foreach (string s2 in s)
+            foreach (JavaVersion java in javas) 
+            {
+                //Console.WriteLine(s2);
+                Console.WriteLine(java.type.ToString() + ':' + java.version + ':' + java.path);
+            }
+            Console.WriteLine("Time used: " + stopwatch.ElapsedMilliseconds / 1000.0 + " s");
+            //Tools.DownloadMissFiles("1.16.5-1-Forge", false);
+            //Console.WriteLine("Forge安装成功！");
 
             //InstallMinecraft.MinecraftInstall.InstallMinecraftVersion("rd-132211", "rd-132211", false, false);
             //InstallMinecraft.MinecraftInstall.InstallMinecraftVersion("1.6", "1.6", false, false);
@@ -112,7 +140,7 @@ namespace demo
             CrashMessage crashMessage = Tools.LaunchGame("C:\\Program Files\\Java\\jre1.8.0_331\\bin\\java.exe", "1.12.2-Forge-Computer", "A", "A", "A");
             */
 
-            Console.WriteLine(GetLogin.OfflineLogin("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaahbbbbbbbbbbbbbbbbbbbbbbbbbbbthdhddrhdgfhdfg").uuid); //918c59deab31be5bda9a153fc57e7582
+            //Console.WriteLine(GetLogin.OfflineLogin("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaahbbbbbbbbbbbbbbbbbbbbbbbbbbbthdhddrhdgfhdfg").uuid); //918c59deab31be5bda9a153fc57e7582
             //联机
             /*
             Console.WriteLine("[0]加入一个联机");
@@ -141,10 +169,10 @@ namespace demo
             */
         }
 
-        /*private static void MicrosoftLogin2_oauth2_OnGetCode(string code)
+        private static void MicrosoftLogin2_oauth2_OnGetCode(string code)
         {
             Console.WriteLine(code);
-        }*/
+        }
         private static void Launch_OnMinecraftCrash(CrashMessage crashMessage)
         {
             Console.WriteLine(crashMessage.Message);

@@ -46,35 +46,25 @@ namespace demo
             //foreach (var java in await Tools.GetJavaListAsync()) Console.WriteLine(java.type.ToString() + ':' + java.path);
             //foreach (var java in SettingsAndRegistry.GetJavaListInRegistry()) Console.WriteLine(java.type.ToString() + ':' + java.path);
             //foreach (string version in Tools.GetVersionList()) Console.WriteLine(version);
-            /*try
-            {
-                MicrosoftLoginResult loginResult = await GetLogin.MicrosoftLogin.NewLogin(true);
-                if (loginResult == null)
-                {
-                    Console.WriteLine("用户取消登录！");
-                    return;
-                }
-                Console.WriteLine(loginResult.name);
-                Console.WriteLine(loginResult.uuid);
-                Console.WriteLine(loginResult.refresh_token);
-                Console.WriteLine(loginResult.access_token);
-            }
-            catch (NotAnException)
-            {
-                
-                Tools.LaunchMinecraft launch = new Tools.LaunchMinecraft();
-                launch.LaunchGame("C:\\Program Files\\Java\\jre1.8.0_331\\bin\\javaw.exe", "1.15", login, out _);
-            }*/
             /*Tools.LaunchMinecraft launch = new Tools.LaunchMinecraft();
             launch.LaunchGame("C:\\Program Files\\Java\\jre1.8.0_331\\bin\\javaw.exe", "1.15", "Ocean");*/
             /*
-            GetLogin.MicrosoftLogin.oauth2_OnGetCode += MicrosoftLogin2_oauth2_OnGetCode;
-            MicrosoftLoginResult result = GetLogin.MicrosoftLogin.DCLogin();
+            GetLogin.MicrosoftLogin.Oauth2_OnGetCode += MicrosoftLogin_Oauth2_OnGetCode;
+            MicrosoftLoginResult result = await GetLogin.MicrosoftLogin.DCLogin();
             if (result == null)
             {
                 Console.WriteLine("用户取消登录！");
                 return;
             }
+            Console.WriteLine(result.name);
+            Console.WriteLine(result.uuid);
+            Console.WriteLine(result.access_token);
+            Console.WriteLine(result.refresh_token);
+            */
+            /*
+            Console.Write("请输入refresh_token：");
+            string token = Console.ReadLine();
+            MicrosoftLoginResult result = await GetLogin.MicrosoftLogin.RefreshLogin(token, true);
             Console.WriteLine(result.name);
             Console.WriteLine(result.uuid);
             Console.WriteLine(result.access_token);
@@ -89,7 +79,7 @@ namespace demo
                 Console.WriteLine("用户取消登录！");
                 return;
             }
-            MicrosoftLoginResult login = GetLogin.MicrosoftLogin.NewLogin.LoginByCode(result);
+            MicrosoftLoginResult login = await GetLogin.MicrosoftLogin.NewLogin.LoginByCode(result);
             if (login == null)
             {
                 Console.WriteLine("错误的url！");
@@ -111,6 +101,7 @@ namespace demo
             Tools.LaunchMinecraft launch = new Tools.LaunchMinecraft();
             launch.OnMinecraftCrash += Launch_OnMinecraftCrash;
             launch.LaunchGame(@"C:\Program Files\Java\jre1.8.0_331\bin\javaw.exe", "1.8.9", "AAA");*/
+            /*
             Stopwatch stopwatch = new Stopwatch();
             stopwatch.Start();
             JavaVersion[] javas = await Tools.FindJava.GetJavas();
@@ -122,16 +113,20 @@ namespace demo
                 Console.WriteLine(java.type.ToString() + ':' + java.version + ':' + java.path);
             }
             Console.WriteLine("Time used: " + stopwatch.ElapsedMilliseconds / 1000.0 + " s");
+            */
             //Tools.DownloadMissFiles("1.16.5-1-Forge", false);
             //Console.WriteLine("Forge安装成功！");
 
             //InstallMinecraft.MinecraftInstall.InstallMinecraftVersion("rd-132211", "rd-132211", false, false);
-            //InstallMinecraft.MinecraftInstall.InstallMinecraftVersion("1.6", "1.6", false, false);
+            //await InstallMinecraft.MinecraftInstall.InstallMinecraftVersion("1.16.5", "1.16.5", true, false);
             //InstallMinecraft.MinecraftInstall.InstallMinecraftVersion("1.8", "1.8", true, true);
-            /*Tools.DownloadMissAsstes("1.1");
+            //Tools.DownloadMissAsstes("1.1");
+            
             Tools.LaunchMinecraft launch = new Tools.LaunchMinecraft();
             launch.OnMinecraftCrash += Launch_OnMinecraftCrash;
-            launch.LaunchGame(@"C:\Program Files\Java\jre1.8.0_331\bin\java.exe", "1.1", "AAA");*/
+            await launch.LaunchGame(@"C:\Program Files\Java\jre1.8.0_331\bin\java.exe", "1.16.5", "AAA");
+            
+            //Tools.ReadVersionJson("1.16.5");
 
             /*
             Tools.MaxMem = 4096;
@@ -157,7 +152,7 @@ namespace demo
             else if (con == "1")
             {
                 Console.Write("请启动一个Minecraft，并在Minecraft中进入一个单人游戏存档，然后选择<在局域网开放>，将聊天框中的数字（端口号）输入：");
-                Console.WriteLine("这是您的联机码，将其发送给您的好友，畅快联机吧：" + Link.StartLink(int.Parse(Console.ReadLine())));
+                Console.WriteLine("这是您的联机码，将其发送给您的好友，畅快联机吧：" + await Link.StartLink(int.Parse(Console.ReadLine())));
                 Console.WriteLine("联机已经开启，按enter键结束联机！");
                 Console.ReadLine();
                 Link.StopLink();
@@ -168,10 +163,9 @@ namespace demo
             }
             */
         }
-
-        private static void MicrosoftLogin2_oauth2_OnGetCode(string code)
+        private static void MicrosoftLogin_Oauth2_OnGetCode(string code, string verification_uri, string message)
         {
-            Console.WriteLine(code);
+            Console.WriteLine(message);
         }
         private static void Launch_OnMinecraftCrash(CrashMessage crashMessage)
         {

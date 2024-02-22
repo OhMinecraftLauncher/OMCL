@@ -8,7 +8,7 @@ namespace OMCL_DLL.Tools
 {
     public enum DownloadSource
     {
-        BMCLAPI, MCBBS,
+        Minecraft, BMCLAPI, MCBBS,
     }
     public enum JavaType
     {

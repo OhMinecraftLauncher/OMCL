@@ -13,7 +13,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.NetworkInformation;
+using System.Net.WebSockets;
+using System.Runtime.ConstrainedExecution;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Security.Policy;
 using System.Text;
@@ -21,6 +24,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using TextCopy;
 using Path = System.IO.Path;
 
 namespace OMCL_DLL.Tools
@@ -28,11 +32,11 @@ namespace OMCL_DLL.Tools
     public class Tools
     {
         public static int DownloadThreadNum = 1;
-        public static string DownloadMinecraftFileUrl = "https://bmclapi2.bangbang93.com/";
+        public static DownloadServer MCFileDownloadServer = DownloadServers.MCFileDownloadServers[0];
+        public static DownloadSource Source = DownloadSource.Minecraft;
         private static readonly string OMCLver = "0.0.0.3";
         public static string Dir = Directory.GetCurrentDirectory();
-        public static List<string> LaunchNoFile = new List<string>();
-        public static List<string> LaunchNoFileNatives = new List<string>();
+        public readonly static Clipboard clipboard = new();
         /// <summary>
         /// 尝试获取操作系统的名称
         /// </summary>
@@ -66,7 +70,7 @@ namespace OMCL_DLL.Tools
         {
             try
             {
-                if (!(dir.EndsWith("\\") || dir.EndsWith("/"))) 
+                if (!(dir.EndsWith('\\') || !dir.EndsWith('/')))
                 {
                     if (GetSystemName() == "windows")
                     {
@@ -81,7 +85,7 @@ namespace OMCL_DLL.Tools
                 {
                     Directory.CreateDirectory(dir);
                 }
-                ZipInputStream s = new ZipInputStream(File.OpenRead(file));
+                ZipInputStream s = new(File.OpenRead(file));
                 ZipEntry theEntry;
                 while ((theEntry = s.GetNextEntry()) != null)
                 {
@@ -93,7 +97,7 @@ namespace OMCL_DLL.Tools
                     }
                     if (fileName != string.Empty)
                     {
-                        if ((!File.Exists(dir + theEntry.Name)) || CanOver) 
+                        if ((!File.Exists(dir + theEntry.Name)) || CanOver)
                         {
                             FileStream streamWriter = File.Create(dir + theEntry.Name);
                             int size = 2048;
@@ -127,12 +131,11 @@ namespace OMCL_DLL.Tools
         /// </summary>
         /// <param name="version">版本名称</param>
         /// <param name="IsLaunch">是否是启动时地补全文件（如果是，下载失败的文件将自动列入LaunchNoFile或LaunchNoFileNatives，进行启动时跳过操作。如果否，文件下载失败将不会有任何反应，直接跳过下载下一个文件。）</param>
-        public static void DownloadMissFiles(string version, bool IsLaunch = true)
+        public static void DownloadMissFiles(Version ver)
         {
             try
             {
                 int threadNum = DownloadThreadNum;
-                Version ver = ReadVersionJson(version);
                 char fp;
                 if (GetSystemName() == "windows")
                 {
@@ -144,7 +147,7 @@ namespace OMCL_DLL.Tools
                 }
                 for (int i = 0; i < ver.libraries.Length; i++)
                 {
-                    if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "libraries", ver.libraries[i] }))) 
+                    if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "libraries", ver.libraries[i] })))
                     {
                         if (ver.libraries[i].Contains("optifine"))
                         {
@@ -152,18 +155,13 @@ namespace OMCL_DLL.Tools
                             {
                                 string[] temppath1 = ver.libraries[i].Replace($"optifine{fp}OptiFine{fp}", "").Split(fp);
                                 string[] temppath2 = temppath1[0].Split('_');
-                                HttpFile.Start(threadNum, DownloadMinecraftFileUrl + @"optifine/" + temppath2[0] + "/" + temppath1[0].Replace(temppath2[0] + "_", "").Replace("_" + temppath2.Last(), "") + "/" + temppath2.Last(), Path.Combine(new string[] { Dir, ".minecraft", "libraries", ver.libraries[i] }));
+                                HttpFile.Start(threadNum, MCFileDownloadServer.Optifine + '/' + temppath2[0] + "/" + temppath1[0].Replace(temppath2[0] + "_", "").Replace("_" + temppath2.Last(), "") + "/" + temppath2.Last(), Path.Combine(new string[] { Dir, ".minecraft", "libraries", ver.libraries[i] }));
                             }
                             catch (Exception e)
                             {
-                                if (IsLaunch && e.Message.Contains("404"))
+                                if (e.Message.Contains("404"))
                                 {
-                                    OMCLLog.WriteLog("[Tools_DownloadMissFiles]将尝试跳过 " + Path.Combine(new string[] { Dir, ".minecraft", "libraries", ver.libraries[i] }) + " 启动Minecraft！", OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
-                                    LaunchNoFile.Add(ver.libraries[i]);
-                                }
-                                else if (IsLaunch)
-                                {
-                                    throw e;
+                                    OMCLLog.WriteLog("[Tools_DownloadMissFiles]跳过文件 " + Path.Combine(new string[] { Dir, ".minecraft", "libraries", ver.libraries[i] }) + " 的下载！", OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
                                 }
                             }
                         }
@@ -171,18 +169,13 @@ namespace OMCL_DLL.Tools
                         {
                             try
                             {
-                                HttpFile.Start(threadNum, DownloadMinecraftFileUrl + "libraries/" + ver.libraries[i].Replace('\\', '/'), Path.Combine(new string[] { Dir, ".minecraft", "libraries", ver.libraries[i] }));
+                                HttpFile.Start(threadNum, MCFileDownloadServer.Libraries + '/' + ver.libraries[i].Replace('\\', '/'), Path.Combine(new string[] { Dir, ".minecraft", "libraries", ver.libraries[i] }));
                             }
                             catch (Exception e)
                             {
-                                if (IsLaunch && e.Message.Contains("404")) 
+                                if (e.Message.Contains("404"))
                                 {
-                                    OMCLLog.WriteLog("[Tools_DownloadMissFiles]将尝试跳过 " + Path.Combine(new string[] { Dir, ".minecraft", "libraries", ver.libraries[i] }) + " 启动Minecraft！", OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
-                                    LaunchNoFile.Add(ver.libraries[i]);
-                                }
-                                else if (IsLaunch)
-                                {
-                                    throw e;
+                                    OMCLLog.WriteLog("[Tools_DownloadMissFiles]跳过文件 " + Path.Combine(new string[] { Dir, ".minecraft", "libraries", ver.libraries[i] }) + " 的下载！", OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
                                 }
                             }
                         }
@@ -194,18 +187,13 @@ namespace OMCL_DLL.Tools
                     {
                         try
                         {
-                            HttpFile.Start(threadNum, DownloadMinecraftFileUrl + "libraries/" + ver.natives[i].Replace('\\', '/'), Path.Combine(new string[] { Dir, ".minecraft", "libraries", ver.natives[i] }));
+                            HttpFile.Start(threadNum, MCFileDownloadServer.Libraries + '/' + ver.natives[i].Replace('\\', '/'), Path.Combine(new string[] { Dir, ".minecraft", "libraries", ver.natives[i] }));
                         }
                         catch (Exception e)
                         {
-                            if (IsLaunch && e.Message.Contains("404")) 
+                            if (e.Message.Contains("404"))
                             {
-                                OMCLLog.WriteLog("[Tools_DownloadMissFiles]将尝试跳过 " + Path.Combine(new string[] { Dir, ".minecraft", "libraries", ver.natives[i] }) + " 启动Minecraft！", OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
-                                LaunchNoFileNatives.Add(ver.natives[i]);
-                            }
-                            else if (IsLaunch)
-                            {
-                                throw e;
+                                OMCLLog.WriteLog("[Tools_DownloadMissFiles]跳过文件 " + Path.Combine(new string[] { Dir, ".minecraft", "libraries", ver.natives[i] }) + " 的下载！", OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
                             }
                         }
                     }
@@ -221,14 +209,14 @@ namespace OMCL_DLL.Tools
         /// 为一个版本补全Assets
         /// </summary>
         /// <param name="version">版本名称</param>
-        public static void DownloadMissAsstes(string version)
+        public static async void DownloadMissAsstes(string version)
         {
             int threadNum = DownloadThreadNum;
             Version ver = ReadVersionJson(version);
             bool DownJson = false;
             try
             {
-                if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "assets", "indexes", ver.assets + ".json" }))) 
+                if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "assets", "indexes", ver.assets + ".json" })))
                 {
                     DownJson = true;
                 }
@@ -252,7 +240,14 @@ namespace OMCL_DLL.Tools
                 }
                 if (versionAssetIndex.SelectToken("assetIndex.url") == null)
                 {
-                    string versionjson = Web.Get(DownloadMinecraftFileUrl + "version/" + ver.assets + "/json");
+                    JObject vi = JObject.Parse(await Web.Get(Tools.MCFileDownloadServer.VersionInfo[1]));
+                    JArray vis = (JArray)vi.SelectToken("versions");
+                    string vjurl = null;
+                    foreach (JToken vip in vis)
+                    {
+                        if (vip.SelectToken("id").ToString() == ver.assets || vip.SelectToken("id").ToString() == ver.id) vjurl = vip.SelectToken("url").ToString();
+                    }
+                    string versionjson = await Web.Get(vjurl);
                     if (versionjson == null || versionjson == "" || versionjson == string.Empty)
                     {
                         OMCLLog.WriteLog("[Tools_DownloadMissAssets]获取版本json时出现错误，请检查您的网络！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
@@ -260,7 +255,7 @@ namespace OMCL_DLL.Tools
                     }
                     versionAssetIndex = JObject.Parse(versionjson);
                 }
-                assets = Web.Get(DownloadMinecraftFileUrl + versionAssetIndex.SelectToken("assetIndex.url").ToString().Replace("https://", "").Replace("http://", "").Replace(versionAssetIndex.SelectToken("assetIndex.url").ToString().Replace("https://", "").Replace("http://", "").Split('/')[0] + '/', ""));
+                assets = await Web.Get(versionAssetIndex.SelectToken("assetIndex.url").ToString());
                 try
                 {
                     Directory.CreateDirectory(Path.Combine(new string[] { Dir, ".minecraft", "assets", "indexes" }));
@@ -289,19 +284,19 @@ namespace OMCL_DLL.Tools
                 }
                 if (ver.assets == "pre-1.6" || ver.assets == "legacy")
                 {
-                    if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "resources", pn }))) 
+                    if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "resources", pn })))
                     {
-                        if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "assets", "objects", hash[0].ToString() + hash[1].ToString(), hash }))) 
+                        if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "assets", "objects", hash[0].ToString() + hash[1].ToString(), hash })))
                         {
                             try
                             {
-                                HttpFile.Start(threadNum, DownloadMinecraftFileUrl + "assets/" + hash[0] + hash[1] + '/' + hash, Path.Combine(new string[] { Dir, ".minecraft", "resources", pn }));
+                                HttpFile.Start(threadNum, MCFileDownloadServer.Assets + '/' + hash[0] + hash[1] + '/' + hash, Path.Combine(new string[] { Dir, ".minecraft", "resources", pn }));
                             }
                             catch
                             {
                                 try
                                 {
-                                    HttpFile.Start(threadNum, DownloadMinecraftFileUrl + "assets/" + hash[0] + hash[1] + '/' + hash, Path.Combine(new string[] { Dir, ".minecraft", "resources", pn }));
+                                    HttpFile.Start(threadNum, MCFileDownloadServer.Assets + '/' + hash[0] + hash[1] + '/' + hash, Path.Combine(new string[] { Dir, ".minecraft", "resources", pn }));
                                 }
                                 catch (Exception e)
                                 {
@@ -321,12 +316,12 @@ namespace OMCL_DLL.Tools
                         }
                     }
                     Directory.CreateDirectory(Path.Combine(new string[] { Dir, ".minecraft", "versions", version, "resources", Path.GetDirectoryName(pn) }));
-                    if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "versions", version, "resources", pn }))) 
+                    if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "versions", version, "resources", pn })))
                     {
                         File.Copy(Path.Combine(new string[] { Dir, ".minecraft", "resources", pn }), Path.Combine(new string[] { Dir, ".minecraft", "versions", version, "resources", pn }), true);
                     }
                     Directory.CreateDirectory(Path.Combine(new string[] { Dir, ".minecraft", "assets", "virtual", ver.assets, Path.GetDirectoryName(pn) }));
-                    if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "assets", "virtual", ver.assets, pn }))) 
+                    if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "assets", "virtual", ver.assets, pn })))
                     {
                         File.Copy(Path.Combine(new string[] { Dir, ".minecraft", "resources", pn }), Path.Combine(new string[] { Dir, ".minecraft", "assets", "virtual", ver.assets, pn }), true);
                     }
@@ -337,13 +332,13 @@ namespace OMCL_DLL.Tools
                     {
                         try
                         {
-                            HttpFile.Start(threadNum, DownloadMinecraftFileUrl + "assets/" + hash[0] + hash[1] + '/' + hash, Path.Combine(new string[] { Dir, ".minecraft", "assets", "objects", hash[0].ToString() + hash[1].ToString(), hash }));
+                            HttpFile.Start(threadNum, MCFileDownloadServer.Assets + '/' + hash[0] + hash[1] + '/' + hash, Path.Combine(new string[] { Dir, ".minecraft", "assets", "objects", hash[0].ToString() + hash[1].ToString(), hash }));
                         }
                         catch
                         {
                             try
                             {
-                                HttpFile.Start(threadNum, DownloadMinecraftFileUrl + "assets/" + hash[0] + hash[1] + '/' + hash, Path.Combine(new string[] { Dir, ".minecraft", "assets", "objects", hash[0].ToString() + hash[1].ToString(), hash }));
+                                HttpFile.Start(threadNum, MCFileDownloadServer.Assets + '/' + hash[0] + hash[1] + '/' + hash, Path.Combine(new string[] { Dir, ".minecraft", "assets", "objects", hash[0].ToString() + hash[1].ToString(), hash }));
                             }
                             catch (Exception e)
                             {
@@ -370,8 +365,19 @@ namespace OMCL_DLL.Tools
         /// <param name="downloadSource">下载源，有BMCLAPI和MCBBS</param>
         public static void ChangeDownloadSource(DownloadSource downloadSource)
         {
-            if (downloadSource == DownloadSource.BMCLAPI) DownloadMinecraftFileUrl = "https://bmclapi2.bangbang93.com/";
-            else DownloadMinecraftFileUrl = "https://download.mcbbs.net/";
+            Source = downloadSource;
+            if (downloadSource == DownloadSource.Minecraft)
+            {
+                MCFileDownloadServer = DownloadServers.MCFileDownloadServers[0];
+            }
+            else if (downloadSource == DownloadSource.BMCLAPI)
+            {
+                MCFileDownloadServer = DownloadServers.MCFileDownloadServers[1];
+            }
+            else if (downloadSource == DownloadSource.MCBBS)
+            {
+                MCFileDownloadServer = DownloadServers.MCFileDownloadServers[2];
+            }
         }
         /// <summary>
         /// 获取当前.minecraft文件夹中所有的版本
@@ -389,7 +395,7 @@ namespace OMCL_DLL.Tools
                 }
                 foreach (string path in paths)
                 {
-                    if (File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "versions", path, path + ".jar" })) && File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "versions", path, path + ".json" }))) 
+                    if (File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "versions", path, path + ".jar" })) && File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "versions", path, path + ".json" })))
                     {
                         result.Add(path);
                     }
@@ -402,493 +408,274 @@ namespace OMCL_DLL.Tools
                 throw new OMCLException("获取Java列表时出现错误！", e);
             }
         }
-        private static Version ReadVersionJson(string version)
-        {
-            return ReadVersionJson(Path.Combine(new string[] { Dir, ".minecraft", "versions", version, version + ".json" }), out _, out _, out _, out _, out _, false);
-        }
-        internal static Version ReadVersionJson(string FilePathOrText, out JArray arguments, out string minecraftArguments, out JArray libraries, out JArray jvm, out string mainClass, bool IsText)
+        private static void UnzipNatives(Version version)
         {
             try
             {
-                string systemname = GetSystemName();
-                /*
-                if (systemname == null)
+                List<string> natives = version.natives.ToList();
+                for (int i = 0; i < natives.Count; i++)
                 {
-                    OMCLLog.WriteLog("[Tools_ReadVersionJson]错误：操作系统不受支持！不是<Windows、Linux、MacOS>其中之一！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                    throw new OMCLException("操作系统不受支持！", e);
+                    if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "libraries", natives[i] }))) continue;
+                    UnZipFile(Path.Combine(new string[] { Dir, ".minecraft", "libraries", natives[i] }), Path.Combine(Dir, ".minecraft", "versions", version.version, version.version + "-natives/"), false);
                 }
-                */
-                List<string> Natives_List = new List<string>(20);
-                List<string> Path = new List<string>(60);
-                JObject o;
-                if (!IsText) o = JObject.Parse(File.ReadAllText(FilePathOrText));
-                else o = JObject.Parse(FilePathOrText);
-                libraries = (JArray)o.SelectToken("libraries");
-                char filesp;
-                if (systemname == "windows") filesp = '\\';
-                else filesp = '/';
-                bool haslw = false;
-                string lw_ver = "";
-                for (int i = 0; i < libraries.Count(); i++)
-                {
-                    string path = (string)o.SelectToken("libraries[" + i + "].name");
-                    if (path.Contains("@"))
-                    {
-                        path = path.Replace(':', filesp);
-                        string[] t = path.Split(filesp);
-                        string[] a = t.Last().Split('@');
-                        t[0] = t.First().Replace('.', filesp);
-                        path = "";
-                        for (int j = 0; j < t.Length - 1; j++)
-                        {
-                            path += t[j] + filesp;
-                        }
-                        path += a[0] + filesp + t[t.Length - 2] + '-' + a[0] + '.' + a[1];
-                        Path.Add(path);
-                        continue;
-                    }
-                    path = path.Replace(':', filesp);
-                    string[] paths = path.Split(filesp);
-                    if (path.Contains("lwjgl") && !haslw)
-                    {
-                        haslw = true;
-                        lw_ver = paths[paths.Length - 1];
-                    }
-                    else if (haslw)
-                    {
-                        if (path.Contains("lwjgl"))
-                        {
-                            if (!path.Contains(lw_ver))
-                            {
-                                continue;
-                            }
-                        }
-                    }
-                    paths[0] = paths.First().Replace('.', filesp);
-                    path = "";
-                    for (int j = 0; j < paths.Length; j++)
-                    {
-                        path += paths[j] + filesp;
-                    }
-                    if (path.Contains("natives"))
-                    {
-                        if (path.Contains($"natives-{systemname}"))
-                        {
-                            if (Environment.Is64BitOperatingSystem == true)
-                            {
-                                if (path.Contains("x86")) continue;
-                            }
-                            else
-                            {
-                                if (!path.Contains("x86")) continue;
-                            }
-                            Natives_List.Add(path + paths[paths.Length - 3] + @"-" + paths[paths.Length - 2] + @"-" + paths[paths.Length - 1] + ".jar");
-                        }
-                        continue;
-                    }
-                    if (path.Contains("universal"))
-                    {
-                        Path.Add(path.Replace($"{filesp}universal", "") + paths[paths.Length - 3] + @"-" + paths[paths.Length - 2] + @"-" + paths[paths.Length - 1] + ".jar");
-                        continue;
-                    }
-                    JObject natives_windows = (JObject)o.SelectToken("libraries[" + i + $"].downloads.classifiers.natives-{systemname}");
-                    if (natives_windows != null)
-                    {
-                        Natives_List.Add(path + paths[paths.Length - 2] + @"-" + paths[paths.Length - 1] + $"-natives-{systemname}.jar");
-                    }
-                    string native = (string)o.SelectToken("libraries[" + i + $"].natives.{systemname}");
-                    if (native != null)
-                    {
-                        native = native.Replace("${arch}", Environment.Is64BitOperatingSystem ? "64" : "32");
-                        Natives_List.Add(path + paths[paths.Length - 2] + @"-" + paths[paths.Length - 1] + "-" + native + ".jar");
-                    }
-                    path = path + paths[paths.Length - 2] + @"-" + paths[paths.Length - 1] + ".jar";
-                    /*if (path.Contains($"launchwrapper{filesp}1.5"))
-                    {
-                        path = path.Replace("1.5", "1.6");
-                    }*/
-                    Path.Add(path);
-                }
-                Natives_List = new HashSet<string>(Natives_List).ToList();
-                Path = new HashSet<string>(Path).ToList();
-                List<Argument> arguments_List = new List<Argument>(15);
-                JArray argumentso = (JArray)o.SelectToken("arguments.game");
-                arguments = argumentso;
-                bool IsVaule = false;
-                string name = "";
-                if (argumentso == null || argumentso.Count == 0)
-                {
-                    minecraftArguments = ((string)o.SelectToken("minecraftArguments"));
-                    string[] minecraftArguments_sp = minecraftArguments.Split(' ');
-                    if (minecraftArguments_sp[0].Contains("--"))
-                    {
-                        for (int j = 1; j < minecraftArguments_sp.Length; j += 2)
-                        {
-                            string tmp = minecraftArguments_sp[j - 1];
-                            string value = minecraftArguments_sp[j];
-                            arguments_List.Add(new Argument() { name = tmp, value = value });
-                        }
-                    }
-                    else
-                    {
-                        for (int j = 0; j < minecraftArguments_sp.Length; j++)
-                        {
-                            string value = minecraftArguments_sp[j];
-                            arguments_List.Add(new Argument() { name = "", value = value });
-                        }
-                    }
-                }
-                else
-                {
-                    minecraftArguments = "";
-                    for (int i = 0; i < argumentso.Count; i++)
-                    {
-                        try
-                        {
-                            string vaule = (string)o.SelectToken("arguments.game[" + i + "]");
-                            if (IsVaule)
-                            {
-                                IsVaule = false;
-                                arguments_List.Add(new Argument() { name = name, value = vaule });
-                            }
-                            else
-                            {
-                                IsVaule = true;
-                                name = vaule;
-                            }
-                        }
-                        catch { }
-                    }
-                }
-                /*for (int i = 1; i <= 999; i += 2)
-                {
-                    Argument argument;
-                    try
-                    {
-                        string name = (string)o.SelectToken("arguments.game[" + (i - 1) + "]");
-                        string value = (string)o.SelectToken("arguments.game[" + i + "]");
-                        if (!name.Contains("--"))
-                        {
-                            name = (string)o.SelectToken("arguments.game[" + (i - 2) + "]");
-                            value = (string)o.SelectToken("arguments.game[" + (i - 1) + "]");
-                        }
-                        if (name == null && value == null)
-                        {
-                            string[] minecraftArguments = ((string)o.SelectToken("minecraftArguments")).Split(' ');
-                            if (minecraftArguments[0].Contains("--"))
-                            {
-                                for (int j = 1; j < minecraftArguments.Length; j += 2)
-                                {
-                                    name = minecraftArguments[j - 1];
-                                    value = minecraftArguments[j];
-                                    argument = new Argument
-                                    {
-                                        name = name,
-                                        value = value,
-                                    };
-                                    arguments.Add(argument);
-                                }
-                            }
-                            else
-                            {
-                                for (int j = 0; j < minecraftArguments.Length; j++)
-                                {
-                                    name = null;
-                                    value = minecraftArguments[j];
-                                    argument = new Argument
-                                    {
-                                        name = name,
-                                        value = value,
-                                    };
-                                    arguments.Add(argument);
-                                }
-                            }
-                            break;
-                        }
-                        argument = new Argument
-                        {
-                            name = name,
-                            value = value,
-                        };
-                        arguments.Add(argument);
-                    }
-                    catch { }
-                }*/
-                for (int i = 0; i < arguments_List.Count; i++)
-                {
-                    if (arguments_List[i].value.Contains("optifine"))
-                    {
-                        arguments_List.Add(arguments_List[i]);
-                        arguments_List.RemoveAt(i);
-                    }
-                }
-                arguments_List.TrimExcess();
-                List<string> Na_temp = new List<string>(20);
-                List<string> Li_temp = new List<string>(20);
-                /*bool IsLwjgl_3_2_2 = false;
-                for (int i = 0; i < Path.Count; i++)
-                {
-                    if (Path[i].Contains(@"lwjgl\3.2.2\"))
-                    {
-                        IsLwjgl_3_2_2 = true;
-                        break;
-                    }
-                }
-                if (IsLwjgl_3_2_2)
-                {
-                    for (int i = 0; i < Natives_List.Count; i++)
-                    {
-                        if (Regex.IsMatch(Natives_List[i], @"\\lwjgl(.*)\\3.2.1\\lwjgl(.*)-3.2.1(.*).jar"))
-                        {
-                            Na_temp.Add(Natives_List[i]);
-                        }
-                    }
-                    for (int i = 0; i < Path.Count; i++)
-                    {
-                        if (Regex.IsMatch(Path[i], @"\\lwjgl(.*)\\3.2.1\\lwjgl(.*)-3.2.1.jar"))
-                        {
-                            Li_temp.Add(Path[i]);
-                        }
-                    }
-                }
-                bool IsLwjgl_Nightly_2_9_4 = false;
-                for (int i = 0; i < Path.Count; i++)
-                {
-                    if (Path[i].Contains("2.9.4-nightly"))
-                    {
-                        IsLwjgl_Nightly_2_9_4 = true;
-                        break;
-                    }
-                }
-                if (IsLwjgl_Nightly_2_9_4)
-                {
-                    for (int i = 0; i < Natives_List.Count; i++)
-                    {
-                        if (Natives_List[i].Contains("2.9.2-nightly"))
-                        {
-                            Na_temp.Add(Natives_List[i]);
-                        }
-                    }
-                    for (int i = 0; i < Path.Count; i++)
-                    {
-                        if (Path[i].Contains("2.9.2-nightly"))
-                        {
-                            Li_temp.Add(Path[i]);
-                        }
-                    }
-                }
-                bool IsLog4j_2_15_0 = false;
-                for (int i = 0; i < Path.Count; i++)
-                {
-                    if (Path[i].Contains(@"\2.15.0\log4j"))
-                    {
-                        IsLog4j_2_15_0 = true;
-                        break;
-                    }
-                }
-                if (IsLog4j_2_15_0)
-                {
-                    for (int i = 0; i < Natives_List.Count; i++)
-                    {
-                        if (Natives_List[i].Contains(@"\2.8.1\log4j"))
-                        {
-                            Na_temp.Add(Natives_List[i]);
-                        }
-                    }
-                    for (int i = 0; i < Path.Count; i++)
-                    {
-                        if (Path[i].Contains(@"\2.8.1\log4j"))
-                        {
-                            Li_temp.Add(Path[i]);
-                        }
-                    }
-                }
-                for (int i = 0; i < Natives_List.Count; i++)
-                {
-                    if (Natives_List[i].Contains(@"java-objc-bridge"))
-                    {
-                        Na_temp.Add(Natives_List[i]);
-                    }
-                    else if (Natives_List[i].Contains(@"lwjgl-platform\2.9.4-nightly"))
-                    {
-                        Na_temp.Add(Natives_List[i]);
-                    }
-                }
-                for (int i = 0; i < Path.Count; i++)
-                {
-                    if (Path[i].Contains(@"java-objc-bridge"))
-                    {
-                        Li_temp.Add(Path[i]);
-                    }
-                    else if (Path[i].Contains(@"lwjgl-platform\2.9.4-nightly"))
-                    {
-                        Li_temp.Add(Path[i]);
-                    }
-                }*/
-                for (int i = 0; i < Path.Count; i++)
-                {
-                    if (Path[i].Contains(@"optifine"))
-                    {
-                        Li_temp.Add(Path[i]);
-                        Path.Add(Path[i]);
-                        break;
-                    }
-                }
-                JArray jvms = (JArray)o.SelectToken("arguments.jvm");
-                jvm = jvms;
-                List<string> jvms_List = new List<string>();
-                string jvm_s = "";
-                if (jvms != null)
-                {
-                    for (int i = 0; i < jvms.Count; i++)
-                    {
-                        try
-                        {
-                            string tjvm_1 = (string)o.SelectToken("arguments.jvm[" + i + "]");
-                            if (tjvm_1 == "-Djava.library.path=${natives_directory}") continue;
-                            else if (tjvm_1 == "-Dminecraft.launcher.brand=${launcher_name}") continue;
-                            else if (tjvm_1 == "-Dminecraft.launcher.version=${launcher_version}") continue;
-                            else if (tjvm_1 == "-cp") continue;
-                            else if (tjvm_1 == "${classpath}") continue;
-                            jvms_List.Add(tjvm_1);
-                        }
-                        catch { }
-                    }
-                    for (int i = 0; i < jvms_List.Count; i++)
-                    {
-                        jvm_s += jvms_List[i];
-                        if (i != (jvms_List.Count - 1)) jvm_s += ' ';
-                    }
-                }
-                Na_temp = new HashSet<string>(Na_temp).ToList();
-                Li_temp = new HashSet<string>(Li_temp).ToList();
-                Na_temp.TrimExcess();
-                Li_temp.TrimExcess();
-                foreach (var str in Na_temp) Natives_List.Remove(str);
-                foreach (var str in Li_temp) Path.Remove(str);
-                Na_temp.Clear();
-                Li_temp.Clear();
-                Natives_List = new HashSet<string>(Natives_List).ToList();
-                Path = new HashSet<string>(Path).ToList();
-                Natives_List.TrimExcess();
-                Path.TrimExcess();
-                Version ver = new Version
-                {
-                    libraries = Path.ToArray(),
-                    natives = Natives_List.ToArray(),
-                    mainClass = (string)o.SelectToken("mainClass"),
-                    arguments = arguments_List.ToArray(),
-                    assets = (string)o.SelectToken("assets"),
-                    jvm = jvm_s,
-                };
-                Natives_List.Clear();
-                Path.Clear();
-                mainClass = ver.mainClass;
-                return ver;
             }
             catch (Exception e)
             {
-                OMCLLog.WriteLog("[Tools_ReadVersionJson]" + @e.Message, OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                throw new OMCLException("读取版本Json时出现错误，请检查你的版本是否正常！", e);
+                OMCLLog.WriteLog("[Tools_UnzipNatives]" + @e.Message, OMCLExceptionClass.DLL, OMCLExceptionType.Error);
+                throw new OMCLException("解压Natives文件时出现问题！", e);
             }
         }
-        /*
-        /// <summary>
-        /// 扫描所有盘符中存在的Java（Task异步）
-        /// </summary>
-        /// <returns>一个数组，里面包含所有的JavaVersion</returns>
-        public static async Task<JavaVersion[]> GetJavaListAsync()
+        public static Version ReadVersionJson(string version)
         {
-            Stopwatch stopwatch = Stopwatch.StartNew();
-            FDTools.search_task = new List<Task>();
-            string[] pathins = { "jdk", "jre", "java", "Java" };
-            string[] pathsames = { "bin" };
-            string[] onlysearchs = { Environment.Is64BitOperatingSystem ? @"Program Files" : @"Program Files (x86)", "XboxGames", "MCLDownload" };
-            List<FindOutDir> result = new List<FindOutDir>();
-            List<JavaVersion> javas = new List<JavaVersion>();
-            List<string> drives = new List<string>();
-            foreach (DriveInfo info in DriveInfo.GetDrives()) if (info.DriveType == DriveType.Fixed) drives.Add(info.Name);
-            foreach (string drive in drives) FDTools.search_task.Add(Task.Run(() => FDTools.SearchDirTask(@drive, "java.exe", onlysearchs, pathins, pathsames, result)));
-            FDTools.search_task.Add(Task.Run(() => FDTools.SearchDirTask(Directory.GetCurrentDirectory(), "java.exe", onlysearchs, pathins, pathsames, result)));
-            while (true)
+            Version result = ReadVersionJson(Path.Combine(new string[] { Dir, ".minecraft", "versions", version, version + ".json" }), out _, out _, out _);
+            result.version = version;
+            return result;
+        }
+        public static Version ReadVersionJson(string FilePathOrText, out JArray arguments, out JArray libraries, out JArray jvm)
+        {
+            string text = FilePathOrText;
+            try
             {
-                if (stopwatch.ElapsedMilliseconds <= 1000)
+                if (File.Exists(text))
+                {
+                    text = File.ReadAllText(text);
+                }
+            }
+            catch { }
+            JToken json = JToken.Parse(text);
+            string sysname = GetSystemName();
+            string arg = json.SelectToken("minecraftArguments")?.ToString();
+            if (arg == null)
+            {
+                arguments = (JArray)json.SelectToken("arguments.game");
+                arg = "";
+                foreach (JToken arg_game in arguments)
+                {
+                    bool cr = true;
+                    try
+                    {
+                        JArray rules = (JArray)arg_game.SelectToken("rules", true);
+                        cr = CheckRuleInJson(rules, sysname);
+                    }
+                    catch { }
+                    if (cr)
+                    {
+                        try
+                        {
+                            JArray values = (JArray)arg_game.SelectToken("value", true);
+                            foreach (JToken value in values)
+                            {
+                                arg += value.ToString() + ' ';
+                            }
+                        }
+                        catch
+                        {
+                            try
+                            {
+                                arg += arg_game.SelectToken("value", true).ToString() + ' ';
+                            }
+                            catch
+                            {
+                                arg += arg_game.ToString() + ' ';
+                            }
+                        }
+                    }
+                }
+                arg = arg.Remove(arg.Length - 1);
+            }
+            else
+            {
+                arguments = null;
+            }
+            libraries = (JArray)json.SelectToken("libraries");
+            char filesp = '/';
+            if (sysname == "windows") filesp = '\\';
+            List<string> L_libraries = new();
+            List<string> L_natives = new();
+            foreach (JToken lib in libraries)
+            {
+                string name = lib.SelectToken("name").ToString();
+                string[] sp_name = name.Split(':');
+                string path = sp_name[0].Replace('.',filesp);
+                for (int i = 1;i < sp_name.Length;i++)
+                {
+                    path += filesp + sp_name[i];
+                }
+                string path_noafter = path + filesp + sp_name[^2] + '-' + sp_name[^1];
+                path = path_noafter + ".jar";
+                bool cr = true;
+                try
+                {
+                    JArray rules = (JArray)lib.SelectToken("rules", true);
+                    cr = CheckRuleInJson(rules, sysname);
+                }
+                catch { }
+                if (sp_name.Last() == "natives-" + sysname + (RuntimeInformation.OSArchitecture == Architecture.X64 ? "" : ('-' + RuntimeInformation.OSArchitecture.ToString().ToLower())))//To Support the version above 1.19.3
+                {
+                    L_natives.Add(path);
+                }
+                else if (sp_name.Last().StartsWith("natives-")) continue;
+                else if (cr)
+                {
+                    L_libraries.Add(path);
+                }
+                JToken natives_sysname = lib.SelectToken("downloads.classifiers");
+                if (natives_sysname != null)
                 {
                     try
                     {
-                        await Task.WhenAll(FDTools.search_task.ToArray());
+                        _ = natives_sysname.SelectToken("natives-" + sysname, true);
+                        L_natives.Add(path_noafter + "-natives-" + sysname + ".jar");
                     }
                     catch { }
                 }
-                else break;
-            }
-            foreach (FindOutDir temp in result)
-            {
-                if (temp.PathinGet == "jre")
+                natives_sysname = lib.SelectToken("natives." + sysname);
+                if (natives_sysname != null)
                 {
-                    javas.Add(new JavaVersion
-                    {
-                        path = temp.path,
-                        type = JavaType.jre,
-                    });
+                    string na = natives_sysname.ToString();
+                    L_natives.Add((path_noafter + '-' + na + ".jar").Replace("${arch}", Environment.Is64BitOperatingSystem ? "64" : "32"));
                 }
-                else if (temp.PathinGet == "jdk")
+            }
+            L_libraries = L_libraries.GroupBy(x => x).Select(y => y.First()).ToList();
+            L_natives = L_natives.GroupBy(x => x).Select(y => y.First()).ToList();
+            string s_jvm = "";
+            jvm = (JArray)json.SelectToken("arguments.jvm");
+            if (jvm != null)
+            {
+                foreach (JToken f_jvm in jvm)
                 {
-                    javas.Add(new JavaVersion
+                    bool cr = true;
+                    try
                     {
-                        path = temp.path,
-                        type = JavaType.jdk,
-                    });
+                        JArray rules = (JArray)f_jvm.SelectToken("rules", true);
+                        cr = CheckRuleInJson(rules, sysname);
+                    }
+                    catch { }
+                    if (cr)
+                    {
+                        try
+                        {
+                            JArray values = (JArray)f_jvm.SelectToken("value", true);
+                            foreach (JToken value in values)
+                            {
+                                s_jvm += '\"' + value.ToString().Replace(@"\u003d", " ") + '\"' + ' ';
+                            }
+                        }
+                        catch
+                        {
+                            try
+                            {
+                                s_jvm += '\"' + f_jvm.SelectToken("value", true).ToString().Replace(@"\u003d", " ") + '\"' + ' ';
+                            }
+                            catch
+                            {
+                                s_jvm += '\"' + f_jvm.ToString().Replace(@"\u003d", " ") + '\"' + ' ';
+                            }
+                        }
+                    }
+                }
+                s_jvm = s_jvm.Remove(s_jvm.Length - 1);
+            }
+            return new Version
+            {
+                arguments = arg,
+                jvm = s_jvm,
+                libraries = L_libraries.ToArray(),
+                natives = L_natives.ToArray(),
+                mainClass = json.SelectToken("mainClass").ToString(),
+                assets = json.SelectToken("assets").ToString(),
+                loggingFile = new LoggingFile
+                {
+                    FileName = json.SelectToken("logging.client.file.id")?.ToString(),
+                    FileUrl = json.SelectToken("logging.client.file.url")?.ToString(),
+                },
+                version = null,
+                id = json.SelectToken("id")?.ToString(),
+                type = json.SelectToken("type")?.ToString(),
+            };
+        }
+        public static bool CheckRuleInJson(JArray rules, string sysname = null)
+        {
+            sysname ??= GetSystemName();
+            foreach (JToken rule in rules)
+            {
+                JToken t_name = rule.SelectToken("os.name");
+                JToken t_arch = rule.SelectToken("os.arch");
+                JToken t_version = rule.SelectToken("os.version");
+                string action = rule.SelectToken("action").ToString();
+                bool r_name = true; 
+                bool r_arch = true;
+                bool r_version = true;
+                if (t_name != null)
+                {
+                    string name = t_name.ToString();
+                    if (name != sysname)
+                    {
+                        r_name = false;
+                    }
+                }
+                if (t_arch != null)
+                {
+                    string arch = t_arch.ToString();
+                    if (RuntimeInformation.OSArchitecture.ToString().ToLower() != arch)
+                    {
+                        r_arch = false;
+                    }
+                }
+                if (t_version != null)
+                {
+                    string version = t_version.ToString().Replace("\\\\", "\\");
+                    string sysver = Environment.OSVersion.Version.ToString();
+                    if (!Regex.Match(sysver, version).Success) 
+                    {
+                        t_version = false;
+                    }
+                }
+                if (r_name && r_arch && r_version)
+                {
+                    if (t_name == null && t_arch == null && t_version == null)
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        if (action == "allow")
+                        {
+                            return true;
+                        }
+                        else
+                        {
+                            return false;
+                        }
+                    }
                 }
                 else
                 {
-                    javas.Add(new JavaVersion
+                    if (action == "allow")
                     {
-                        path = temp.path,
-                        type = JavaType.unknown,
-                    });
-                }
-            }
-            JavaVersion[] javas_in_reg = SettingsAndRegistry.GetJavaListInRegistry();
-            foreach (JavaVersion java in javas_in_reg)
-            {
-                javas.Add(java);
-            }
-            List<JavaVersion> new_javas = new List<JavaVersion>();
-            for (int i = 0; i < javas.Count; i++)
-            {
-                bool IsOK = true;
-                for (int j = 0; j < new_javas.Count; j++)
-                {
-                    if (javas[i].path == new_javas[j].path)
+                        return false;
+                    }
+                    else
                     {
-                        IsOK = false;
-                        break;
+                        return true;
                     }
                 }
-                if (IsOK)
-                {
-                    new_javas.Add(javas[i]);
-                }
             }
-            new_javas.Sort(new JavaComp());
-            OMCLLog.WriteLog("[Tools_GetJavaListAsync]耗时：" + (double)stopwatch.ElapsedMilliseconds / 1000 + " s，找到Java " + new_javas.Count + " 个！", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
-            return new_javas.ToArray();
+            return false;
         }
-        */
 
         public class LaunchMinecraft
         {
             public bool IsIsolation = true;
-            public int MaxMem = 2048, MinMem = 1024;
+            public int MaxMem = 2048;
             private string NativesPath = "";
             public string jvm = "", otherArguments = "";
             public delegate void MinecraftCrashedDelegate(CrashMessage crashMessage);
             public event MinecraftCrashedDelegate OnMinecraftCrash;
-            public Process process = new Process();
+            public Process process = new();
             public Server server = null;
             private string version = "";
-            private List<string> OutputLines = new List<string>();
+            private List<string> OutputLines = new();
             private bool IsMinecraftCrashed = true;
             /// <summary>
             /// 更改Natives路径（注意：如果更改Natives的路径，OMCL将不会再帮您解压Natives库，因此，如果该文件夹不存在或该文件夹中的Natives文件不完整，将导致您的Minecraft无法启动）
@@ -906,18 +693,18 @@ namespace OMCL_DLL.Tools
             /// <param name="java">java.exe或javaw.exe的路径</param>
             /// <param name="version">版本名称</param>
             /// <param name="playerName">离线玩家名称</param>
-            public void LaunchGame(string java, string version, string playerName)
+            public async Task LaunchGame(string java, string version, string playerName)
             {
                 try
                 {
-                    OfflineLoginResult result = GetLogin.OfflineLogin(playerName);
+                    OfflineLoginResult result = await GetLogin.OfflineLogin(playerName);
                     LaunchGame(java, version, result.name, result.uuid, result.uuid);
                     return;
                 }
                 catch (Exception e)
                 {
                     OMCLLog.WriteLog("[Tools_LaunchGame]" + @e.Message, OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                    throw new OMCLException("启动失败！",e);
+                    throw new OMCLException("启动失败！", e);
                 }
             }
             /// <summary>
@@ -927,11 +714,11 @@ namespace OMCL_DLL.Tools
             /// <param name="version">版本名称</param>
             /// <param name="login">提供一个AuthlibInjectorLoginResult用于登录</param>
             /// <param name="result">返回一个新的AuthlibInjectorLoginResult</param>
-            public void LaunchGame(string java, string version, AuthlibInjectorLoginResult login, out AuthlibInjectorLoginResult result, int user = -1)
+            public async Task<AuthlibInjectorLoginResult> LaunchGame(string java, string version, AuthlibInjectorLoginResult login, int user = -1)
             {
                 try
                 {
-                    result = GetLogin.RefreshAuthlibInjectorLogin(login);
+                    AuthlibInjectorLoginResult result = await GetLogin.RefreshAuthlibInjectorLogin(login);
                     string playerName;
                     string uuid;
                     string token = result.access_token; ;
@@ -947,25 +734,25 @@ namespace OMCL_DLL.Tools
                     }
                     try
                     {
-                        if (!File.Exists(Path.Combine(new string[] { Dir, "OMCL", "Login", "authlib-injector-1.2.1.jar" }))) HttpFile.Start(DownloadThreadNum, "https://bmclapi2.bangbang93.com/mirrors/authlib-injector/artifact/49/authlib-injector-1.2.1.jar", Path.Combine(new string[] { Dir, "OMCL", "Login", "authlib-injector-1.2.1.jar" }));
+                        if (!File.Exists(Path.Combine(new string[] { Dir, "OMCL", "Login", "authlib-injector.jar" }))) HttpFile.Start(DownloadThreadNum, MCFileDownloadServer.authlib_injector + "/artifact/52/authlib-injector-1.2.4.jar", Path.Combine(new string[] { Dir, "OMCL", "Login", "authlib-injector.jar" }));
                     }
                     catch
                     {
                         try
                         {
                             Directory.CreateDirectory(Path.Combine(new string[] { Dir, "OMCL", "Login" }));
-                            HttpFile.Start(DownloadThreadNum, "https://bmclapi2.bangbang93.com/mirrors/authlib-injector/artifact/49/authlib-injector-1.2.1.jar", Path.Combine(new string[] { Dir, "OMCL", "Login", "authlib-injector-1.2.1.jar" }));
+                            HttpFile.Start(DownloadThreadNum, MCFileDownloadServer.authlib_injector + "/artifact/52/authlib-injector-1.2.4.jar", Path.Combine(new string[] { Dir, "OMCL", "Login", "authlib-injector.jar" }));
                         }
                         catch (Exception e)
                         {
-                            OMCLLog.WriteLog("[Tools_LaunchGame]错误：下载authlib-injector-1.2.1.jar时出现错误，请检查你的网络是否正常！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                            throw new OMCLException("启动失败，下载authlib-injector-1.2.1.jar时出现错误，请检查你的网络是否正常！", e);
+                            OMCLLog.WriteLog("[Tools_LaunchGame]错误：下载authlib-injector.jar时出现错误，请检查你的网络是否正常！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
+                            throw new OMCLException("启动失败，下载authlib-injector.jar时出现错误，请检查你的网络是否正常！", e);
                         }
                     }
                     string Base64;
                     try
                     {
-                        Base64 = Convert.ToBase64String(Encoding.Default.GetBytes(Web.Get(login.server)));
+                        Base64 = Convert.ToBase64String(Encoding.Default.GetBytes(await Web.Get(login.server)));
                     }
                     catch (Exception e)
                     {
@@ -974,15 +761,15 @@ namespace OMCL_DLL.Tools
                     }
                     try
                     {
-                        if (jvm.Last() == ' ') jvm += "-javaagent:" + Path.Combine(new string[] { Dir, "OMCL", "Login", "authlib-injector-1.2.1.jar" }) + "=" + login.server + " -Dauthlibinjector.yggdrasil.prefetched=" + Base64;
-                        else jvm += " -javaagent:" + Path.Combine(new string[] { Dir, "OMCL", "Login", "authlib-injector-1.2.1.jar" }) + "=" + login.server + " -Dauthlibinjector.yggdrasil.prefetched=" + Base64;
+                        if (jvm.Last() == ' ') jvm += "-javaagent:" + Path.Combine(new string[] { Dir, "OMCL", "Login", "authlib-injector.jar" }) + "=" + login.server + " -Dauthlibinjector.yggdrasil.prefetched=" + Base64;
+                        else jvm += " -javaagent:" + Path.Combine(new string[] { Dir, "OMCL", "Login", "authlib-injector.jar" }) + "=" + login.server + " -Dauthlibinjector.yggdrasil.prefetched=" + Base64;
                     }
                     catch
                     {
-                        jvm += "-javaagent:" + Path.Combine(new string[] { Dir, "OMCL", "Login", "authlib-injector-1.2.1.jar" }) + "=" + login.server + " -Dauthlibinjector.yggdrasil.prefetched=" + Base64;
+                        jvm += "-javaagent:" + Path.Combine(new string[] { Dir, "OMCL", "Login", "authlib-injector.jar" }) + "=" + login.server + " -Dauthlibinjector.yggdrasil.prefetched=" + Base64;
                     }
                     LaunchGame(java, version, playerName, uuid, token);
-                    return;
+                    return result;
                 }
                 catch (Exception e)
                 {
@@ -997,11 +784,11 @@ namespace OMCL_DLL.Tools
             /// <param name="version">版本名称</param>
             /// <param name="login">提供一个UnifiedPassLoginResult用于登录</param>
             /// <param name="result">返回一个新的UnifiedPassLoginResult</param>
-            public void LaunchGame(string java, string version, UnifiedPassLoginResult login, out UnifiedPassLoginResult result)
+            public async Task<UnifiedPassLoginResult> LaunchGame(string java, string version, UnifiedPassLoginResult login)
             {
                 try
                 {
-                    result = GetLogin.RefreshUnifiedPassLogin(login.serverid, login.client_token, login.access_token);
+                    UnifiedPassLoginResult result = await GetLogin.RefreshUnifiedPassLogin(login.serverid, login.client_token, login.access_token);
                     string playerName;
                     string uuid;
                     string token;
@@ -1035,7 +822,7 @@ namespace OMCL_DLL.Tools
                         jvm = "-javaagent:" + Path.Combine(new string[] { Dir, "OMCL", "Login", "nide8auth.jar" }) + "=" + result.serverid + " -Dnide8auth.client=true";
                     }
                     LaunchGame(java, version, playerName, uuid, token);
-                    return;
+                    return result;
                 }
                 catch (Exception e)
                 {
@@ -1050,11 +837,11 @@ namespace OMCL_DLL.Tools
             /// <param name="version">版本名称</param>
             /// <param name="login">提供一个MicrosoftLoginResult以进行登录</param>
             /// <param name="result">返回一个新的MicrosoftLoginResult</param>
-            public void LaunchGame(string java, string version, MicrosoftLoginResult login, out MicrosoftLoginResult result)
+            public async Task<MicrosoftLoginResult> LaunchGame(string java, string version, MicrosoftLoginResult login)
             {
                 try
                 {
-                    result = MicrosoftLogin.RefreshLogin(login);
+                    MicrosoftLoginResult result = await MicrosoftLogin.RefreshLogin(login);
                     string playerName;
                     string uuid;
                     string token;
@@ -1062,7 +849,7 @@ namespace OMCL_DLL.Tools
                     uuid = result.uuid;
                     token = result.access_token;
                     LaunchGame(java, version, playerName, uuid, token, LoginType.Microsoft);
-                    return;
+                    return result;
                 }
                 catch (Exception e)
                 {
@@ -1077,11 +864,11 @@ namespace OMCL_DLL.Tools
             /// <param name="version">版本名称</param>
             /// <param name="login">提供一个MojangLoginResult以进行登录</param>
             /// <param name="result">返回一个新的MojangLoginResult</param>
-            public void LaunchGame(string java, string version, MojangLoginResult login, out MojangLoginResult result)
+            public async Task<MojangLoginResult> LaunchGame(string java, string version, MojangLoginResult login)
             {
                 try
                 {
-                    result = GetLogin.RefreshMojangLogin(login.access_token);
+                    MojangLoginResult result = await GetLogin.RefreshMojangLogin(login.access_token);
                     string playerName;
                     string uuid;
                     string token;
@@ -1089,7 +876,7 @@ namespace OMCL_DLL.Tools
                     uuid = result.uuid;
                     token = result.access_token;
                     LaunchGame(java, version, playerName, uuid, token);
-                    return;
+                    return result;
                 }
                 catch (Exception e)
                 {
@@ -1105,149 +892,95 @@ namespace OMCL_DLL.Tools
             /// <param name="playerName">玩家名称</param>
             /// <param name="uuid">玩家uuid</param>
             /// <param name="token">玩家登录的access_token</param>
+            /// <param name="loginType">一个LoginType枚举类型，指示登录方式是否是微软登录</param>
             public void LaunchGame(string java, string version, string playerName, string uuid, string token, LoginType loginType = LoginType.Other)
             {
+                string sysname = GetSystemName();
+                char pathsp = ':';
+                if (sysname == "windows") pathsp = ';';
+                OutputLines = new List<string>();
+                IsMinecraftCrashed = true;
+                this.version = version;
+                string VersionJarFile = Path.Combine(new string[] { Dir, ".minecraft", "versions", version, version + ".jar" });
+                if (!File.Exists(VersionJarFile) || !File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "versions", version, version + ".json" })))
+                {
+                    OMCLLog.WriteLog("[Tools_LaunchGame]版本 " + version + " 有问题，请重新下载！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
+                    throw new OMCLException("版本有问题！请重新下载！");
+                }
+                Version ver = ReadVersionJson(version);
+                DownloadMissFiles(ver);
+                string GameCMD = "";
+                if (NativesPath == "")
+                {
+                    NativesPath = Path.Combine(new string[] { Dir, ".minecraft", "versions", version, version + "-natives" });
+                    UnzipNatives(ver);
+                }
+                string classpath = "";
+                foreach (string lib in ver.libraries)
+                {
+                    classpath += Path.Combine(new string[] { Dir, ".minecraft", "libraries", lib }) + pathsp;
+                }
+                classpath += VersionJarFile;
+                string ver_jvm = ver.jvm;
+                /*
+                bool IsLoggingFileOK = true;
                 try
                 {
-                    OutputLines = new List<string>();
-                    IsMinecraftCrashed = true;
-                    this.version = version;
-                    if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "versions", version, version + ".jar" })) || !File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "versions", version, version + ".json" }))) 
+                    if (ver.loggingFile.FileUrl != null && ver.loggingFile.FileName != null)
                     {
-                        OMCLLog.WriteLog("[Tools_LaunchGame]版本 " + version + " 有问题，请重新下载！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                        throw new OMCLException("版本有问题！请重新下载！");
-                    }
-                    LaunchNoFile = new List<string>();
-                    LaunchNoFileNatives = new List<string>();
-                    Version ver = ReadVersionJson(version);
-                    string GameCMD = "", ClientPath = Path.Combine(new string[] { ".minecraft", "versions", version, version + ".jar" });
-                    DownloadMissFiles(version);
-                    string _NativesPath;
-                    UnzipNatives(version);
-                    if (NativesPath == "") _NativesPath = Path.Combine(new string[] { Dir, ".minecraft", "versions", version, version + "-natives" }); else _NativesPath = NativesPath;
-                    GameCMD += "-Dfile.encoding=GB18030 -Dsun.stdout.encoding=GB18030 -Dsun.stderr.encoding=GB18030 -Djava.rmi.server.useCodebaseOnly=true -Dcom.sun.jndi.rmi.object.trustURLCodebase=false -Dcom.sun.jndi.cosnaming.object.trustURLCodebase=false -Dlog4j2.formatMsgNoLookups=true -Dminecraft.client.jar={Client_Path} -XX:+UnlockExperimentalVMOptions -XX:+UseG1GC -XX:G1NewSizePercent=20 -XX:G1ReservePercent=20 -XX:MaxGCPauseMillis=50 -XX:G1HeapRegionSize=32m -XX:-UseAdaptiveSizePolicy -XX:-OmitStackTraceInFastThrow -XX:-DontCompileHugeMethods -Dfml.ignoreInvalidMinecraftCertificates=true -Dfml.ignorePatchDiscrepancies=true -XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump -Xms{Min_Mem}m -Xmx{Max_Mem}m -Djava.library.path=\"{Natives_Path}\" -Dminecraft.launcher.brand=OMCL -Dminecraft.launcher.version={OMCL_Version} ".Replace("{OMCL_Version}", OMCLver).Replace("{Natives_Path}", _NativesPath).Replace("{Max_Mem}", MaxMem.ToString()).Replace("{Min_Mem}", MinMem.ToString()).Replace("{Client_Path}", ClientPath);
-                    if (ver.jvm != "") GameCMD += ver.jvm + " ";
-                    if (jvm != "") GameCMD += jvm + " ";
-                    GameCMD += "-cp \"";
-                    string tempCP = "";
-                    List<string> libraries = ver.libraries.ToList();
-                    char libssp;
-                    if (GetSystemName() == "windows")
-                    {
-                        libssp = ';';
-                    }
-                    else
-                    {
-                        libssp = ':';
-                    }
-                    foreach (string No_path in LaunchNoFile) libraries.Remove(No_path);
-                    for (int i = 0; i < libraries.Count; i++)
-                    {
-                        if (i == libraries.Count - 1) tempCP += Path.Combine(new string[] { Dir, ".minecraft", "libraries", libraries[i] });
-                        else tempCP += Path.Combine(new string[] { Dir, ".minecraft", "libraries", libraries[i] }) + libssp;
-                    }
-                    GameCMD += tempCP + ";" + Path.Combine(new string[] { Dir, ".minecraft", "versions", version, version + ".jar" }) + "\" ";
-                    GameCMD += ver.mainClass + ' ';
-                    for (int i = 0; i < ver.arguments.Length; i++)
-                    {
-                        if (ver.arguments[i].name != null && ver.arguments[i].name != "") GameCMD += ver.arguments[i].name + ' ';
-                        switch (ver.arguments[i].value)
+                        if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", ver.loggingFile.FileName })))
                         {
-                            case "${auth_player_name}":
-                                GameCMD += playerName + ' ';
-                                break;
-                            case "${version_name}":
-                                GameCMD += version + ' ';
-                                break;
-                            case "${game_directory}":
-                                if (IsIsolation) GameCMD += '\"' + Path.Combine(new string[] { Dir, ".minecraft", "versions", version }) + '\"' + ' ';
-                                else GameCMD += '\"' + Path.Combine(new string[] { Dir, ".minecraft" }) + '\"' + ' ';
-                                break;
-                            case "${assets_root}":
-                                GameCMD += '\"' + Path.Combine(new string[] { Dir, ".minecraft", "assets" }) + '\"' + ' ';
-                                break;
-                            case "${assets_index_name}":
-                                GameCMD += ver.assets + ' ';
-                                break;
-                            case "${auth_uuid}":
-                                GameCMD += uuid + ' ';
-                                break;
-                            case "${auth_session}":
-                                GameCMD += token + ' ';
-                                break;
-                            case "${auth_access_token}":
-                                GameCMD += token + ' ';
-                                break;
-                            case "${user_type}":
-                                if (loginType == LoginType.Microsoft)
-                                {
-                                    GameCMD += "msa" + ' ';
-                                }
-                                else
-                                {
-                                    GameCMD += "mojang" + ' ';
-                                }
-                                break;
-                            case "${version_type}":
-                                GameCMD += "\"OMCL " + OMCLver + "\" ";
-                                break;
-                            case "${user_properties}":
-                                GameCMD += "{} ";
-                                break;
-                            case "${game_assets}":
-                                GameCMD += '\"' + Path.Combine(new string[] { Dir, ".minecraft", "assets", "virtual", ver.assets }) + '\"' + ' ';
-                                /*if (!IsIsolation) GameCMD += '\"' + Path.Combine(new string[] { Dir, ".minecraft", "versions", version, "resources" }) + '\"' + ' ';
-                                else GameCMD += '\"' + Path.Combine(new string[] { Dir, ".minecraft", "resources" }) + '\"' + ' ';*/
-                                break;
-                            default:
-                                if (ver.arguments[i].value != null && ver.arguments[i].value != "" && !ver.arguments[i].value.Contains("$")) GameCMD += ver.arguments[i].value + ' ';
-                                else GameCMD.Replace(ver.arguments[i].name + ' ', "");
-                                break;
-                        }
-                    }
-                    if (otherArguments != "") GameCMD += otherArguments;
-                    else if (server != null && server.server_url_or_ip != "" && server.server_url_or_ip != null && server.server_url_or_ip != string.Empty) GameCMD += "--server " + server.server_url_or_ip + " --port " + server.server_port;
-                    else GameCMD.Remove(GameCMD.Length - 2, 1);
-                    Console.WriteLine("启动脚本如下：\n" + '\"' + java + '\"' + ' ' + GameCMD);
-                    OMCLLog.WriteLog("[Tools_LaunchGame]启动脚本如下：" + ("\"" + java + "\" " + GameCMD).Replace(token, "access_token隐藏").Replace(uuid, "uuid隐藏").Replace(playerName, "玩家名称隐藏") + "。", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
-                    if (IsIsolation)
-                    {
-                        if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "versions", version, "options.txt" }))) 
-                        {
-                            File.WriteAllText(Path.Combine(new string[] { Dir, ".minecraft", "versions", version, "options.txt" }), "lang:zh_CN");
+                            HttpFile.Start(DownloadThreadNum, ver.loggingFile.FileUrl, Path.Combine(new string[] { Dir, ".minecraft", ver.loggingFile.FileName }));
                         }
                     }
                     else
                     {
-                        if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "options.txt" }))) 
-                        {
-                            File.WriteAllText(Path.Combine(new string[] { Dir, ".minecraft", "options.txt" }), "lang:zh_CN");
-                        }
+                        IsLoggingFileOK = false;
                     }
-                    process = new Process();
-                    process.StartInfo.Arguments = GameCMD;
-                    process.StartInfo.FileName = java;
-                    process.StartInfo.UseShellExecute = false;
-                    process.StartInfo.CreateNoWindow = true;
-                    process.StartInfo.RedirectStandardOutput = true;
-                    process.StartInfo.RedirectStandardError = true;
-                    process.OutputDataReceived += Process_OutputDataReceived;
-                    process.ErrorDataReceived += Process_OutputDataReceived;
-                    if (!IsIsolation) process.StartInfo.WorkingDirectory = Path.Combine(new string[] { Dir, ".minecraft" });
-                    else process.StartInfo.WorkingDirectory = Path.Combine(new string[] { Dir, ".minecraft", "versions", version });
-                    process.Start();
-                    process.BeginOutputReadLine();
-                    process.BeginErrorReadLine();
-                    new Thread(new ThreadStart(WaitMinecraft))
-                    {
-                        IsBackground = false
-                    }.Start();
                 }
-                catch (Exception e)
+                catch
                 {
-                    OMCLLog.WriteLog("[Tools_LaunchGame]" + @e.Message, OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                    throw new OMCLException("启动时出现错误！",e);
+                    IsLoggingFileOK = false;
                 }
+                */
+                if (ver_jvm != null)
+                {
+                    GameCMD += (MaxMem > 0 ? ("-Xmx" + MaxMem + "m ") : "") + "-Dlog4j2.formatMsgNoLookups=true " /*+ (IsLoggingFileOK ? "\"-Dlog4j.configurationFile=${path}\" ".Replace("${path}", Path.Combine(new string[] { Dir, ".minecraft", ver.loggingFile.FileName })) : "")*/ + ver_jvm.Replace("${natives_directory}", NativesPath).Replace("${launcher_name}", "OMCL").Replace("${launcher_version}", OMCLver).Replace("${classpath}", classpath) + ' ';
+                }
+                else
+                {
+                    GameCMD += (MaxMem > 0 ? ("-Xmx" + MaxMem + "m ") : "") + "-Dlog4j2.formatMsgNoLookups=true " /*+ (IsLoggingFileOK ? "\"-Dlog4j.configurationFile=${path}\" ".Replace("${path}", Path.Combine(new string[] { Dir, ".minecraft", ver.loggingFile.FileName })) : "")*/ + "-XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump -Djava.library.path=\"" + NativesPath + "\" " + ((sysname == "windows" && Regex.IsMatch(Environment.OSVersion.Version.ToString(), "^10\\.")) ? "\"-Dos.name=Windows 10\" -Dos.version=10.0 " : "") + (sysname == "osx" ? "-XstartOnFirstThread " : "") + "-Dminecraft.launcher.brand=OMCL " + "-Dminecraft.launcher.version=" + OMCLver + ' ' + "-cp " + classpath + ' ';
+                }
+                if (jvm != "")
+                {
+                    GameCMD += jvm + ' ';
+                }
+                GameCMD += ver.mainClass + ' ';
+                GameCMD += (ver.arguments + (otherArguments == "" ? "" : ' ' + otherArguments) + (server == null ? "" : (" --server " + server.server_url_or_ip + " --port " + server.server_port))).Replace("${auth_player_name}", playerName).Replace("${version_name}", '\"' + version + '\"').Replace("${game_directory}", '\"' + (IsIsolation ? Path.Combine(new string[] { Dir, ".minecraft", "versions", version }) : Path.Combine(new string[] { Dir, ".minecraft" })) + '\"').Replace("${assets_root}", '\"' + Path.Combine(new string[] { Dir, ".minecraft", "asstes" }) + '\"').Replace("${assets_index_name}", ver.assets).Replace("${auth_uuid}", uuid).Replace("${auth_access_token}", token).Replace("${user_type}", loginType == LoginType.Microsoft ? "msa" : "mojang").Replace("${version_type}", '\"' + ver.type + "/OMCL " + OMCLver + '\"').Replace("${auth_session}", "token:" + token);
+                Console.WriteLine("启动脚本如下：\n" + '\"' + java + '\"' + ' ' + GameCMD);
+                OMCLLog.WriteLog("[Tools_LaunchGame]启动脚本如下：" + ("\"" + java + "\" " + GameCMD).Replace(token, "access_token隐藏").Replace(uuid, "uuid隐藏").Replace(playerName, "玩家名称隐藏") + "。", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
+                process = new()
+                {
+                    StartInfo = new()
+                    {
+                        FileName = java,
+                        Arguments = GameCMD,
+                        RedirectStandardError = true,
+                        RedirectStandardOutput = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        WorkingDirectory = IsIsolation ? Path.Combine(new string[] { Dir, ".minecraft", "versions", version }) : Path.Combine(new string[] { Dir, ".minecraft" }),
+                    },
+                };
+                process.OutputDataReceived += Process_OutputDataReceived;
+                process.ErrorDataReceived += Process_OutputDataReceived;
+                process.Start();
+                process.BeginOutputReadLine();
+                process.BeginErrorReadLine();
+                new Thread(new ThreadStart(WaitMinecraft))
+                {
+                    IsBackground = false
+                }.Start();
             }
             private void Process_OutputDataReceived(object sender, DataReceivedEventArgs e)
             {
@@ -1307,7 +1040,7 @@ namespace OMCL_DLL.Tools
                             {
                                 OMCLLog.WriteLog("[CrashMessageGet]Minecraft报出了这个错误：<" + s + ">。", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
                                 CrashMessage.Solution = "这个是您的Minecraft报出的错误：" + s + '\n';
-                                switch(s)
+                                switch (s)
                                 {
                                     case "java.lang.NullPointerException":
                                         CrashMessage.Message = "您的Minecraft可能因为找不到语言文件或Assets资源文件而崩溃！";
@@ -1523,195 +1256,10 @@ namespace OMCL_DLL.Tools
                     return crashMessage;
                 }
             }
-            private void UnzipNatives(string version)
-            {
-                try
-                {
-                    Version ver = ReadVersionJson(version);
-                    List<string> natives = ver.natives.ToList();
-                    for (int i = 0; i < LaunchNoFileNatives.Count; i++) natives.Remove(LaunchNoFileNatives[i]);
-                    for (int i = 0; i < natives.Count; i++)
-                    {
-                        UnZipFile(Path.Combine(new string[] { Dir, ".minecraft", "libraries", natives[i] }), Path.Combine(Dir, ".minecraft", "versions", version, version + "-natives/"), false);
-                    }
-                }
-                catch (Exception e)
-                {
-                    OMCLLog.WriteLog("[Tools_UnzipNatives]" + @e.Message, OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                    throw new OMCLException("解压Natives文件时出现问题！", e);
-                }
-            }
         }
-
         public class FDTools
         {
-            /*
-            public static List<Task> search_task = new List<Task>();
-            /// <summary>
-            /// 提供高级、模糊、高效搜索文件夹的方法（递归、Task方式异步）。
-            /// </summary>
-            /// <param name="path">要查找的文件夹所在的根目录
-            /// 如C:\</param>
-            /// <param name="filename">要查找的文件夹中有的文件
-            /// 如java.exe</param>
-            /// <param name="onlysearches">仅在根目录中的哪个目录查找（筛选二级目录）
-            /// 如：Program Files</param>
-            /// <param name="pathins">要查找的文件夹的目录中包含的元素（或）
-            /// 如：jre，jdk，java</param>
-            /// <param name="pathsames">与“pathins”基本相同，但是要求同时存在（与）
-            /// 如：bin，与“pathins”结合后得到三种可能的方法（条件）：jre+bin，jdk+bin，java+bin</param>
-            /// <param name="result">结果列表，要求必须提供一个正确的FindOutDir类型的List</param>
-            public static void SearchDirTask(string path, string filename, string[] onlysearches, string[] pathins, string[] pathsames, List<FindOutDir> result)
-            {
-                string[] dirs = Directory.GetDirectories(path, "*", SearchOption.TopDirectoryOnly);
-                foreach (string dir in dirs)
-                {
-                    bool cansearch = true;
-                    foreach (string onlysearch in onlysearches)
-                    {
-                        if (dir.Contains(onlysearch)) break;
-                        if (onlysearch == onlysearches.Last()) cansearch = false;
-                    }
-                    if (cansearch)
-                    {
-                        string GetPainin = null;
-                        bool findout = false;
-                        foreach (string pathin in pathins)
-                        {
-                            if (dir.Contains(pathin))
-                            {
-                                GetPainin = pathin;
-                                break;
-                            }
-                        }
-                        int HasNum = 0;
-                        foreach (string pathsame in pathsames)
-                        {
-                            if (dir.Contains(pathsame))
-                            {
-                                HasNum++;
-                            }
-                        }
-                        if (HasNum == pathsames.Length && GetPainin != null)
-                        {
-                            string[] files;
-                            try
-                            {
-                                files = Directory.GetFiles(dir, "*", SearchOption.TopDirectoryOnly);
-                            }
-                            catch
-                            {
-                                continue;
-                            }
-                            foreach (string file in files)
-                            {
-                                if (Path.GetFileName(file) == filename)
-                                {
-                                    result.Add(new FindOutDir
-                                    {
-                                        path = dir,
-                                        PathinGet = GetPainin,
-                                    });
-                                    findout = true;
-                                    break;
-                                }
-                            }
-                        }
-                        try
-                        {
-                            if (findout) continue;
-                            else if (Directory.GetDirectories(dir).Length != 0)
-                            {
-                                search_task.Add(Task.Run(() => SearchDirTask(dir, filename, onlysearches, pathins, pathsames, result)));
-                            }
-                        }
-                        catch { }
-                    }
-                }
-            }
-            /// <summary>
-            /// 提供高级、模糊、高效搜索文件的方法（递归、Task方式异步）。与“SearchDirTask”基本相同，但最后result增加的是FindOutFile类型的List。
-            /// </summary>
-            /// <param name="path">要查找的文件所在的根目录
-            /// 如C:\</param>
-            /// <param name="filename">要查找的文件名
-            /// 如java.exe</param>
-            /// <param name="onlysearches">仅在根目录中的哪个目录查找（筛选二级目录）
-            /// 如：Program Files</param>
-            /// <param name="pathins">要查找的文件所在的文件夹的目录中包含的元素（或）
-            /// 如：jre，jdk，java</param>
-            /// <param name="pathsames">与“pathins”基本相同，但是要求同时存在（与）
-            /// 如：bin，与“pathins”结合后得到三种可能的方法（条件）：jre+bin，jdk+bin，java+bin</param>
-            /// <param name="result">结果列表，要求必须提供一个正确的FindOutFile类型的List</param>
-            public static void SearchFileTask(string path, string filename, string[] onlysearches, string[] pathins, string[] pathsames, List<FindOutFile> result)
-            {
-                string[] dirs = Directory.GetDirectories(path, "*", SearchOption.TopDirectoryOnly);
-                foreach (string dir in dirs)
-                {
-                    bool cansearch = true;
-                    foreach (string onlysearch in onlysearches)
-                    {
-                        if (dir.Contains(onlysearch)) break;
-                        if (onlysearch == onlysearches.Last()) cansearch = false;
-                    }
-                    if (cansearch)
-                    {
-                        string GetPainin = null;
-                        bool findout = false;
-                        foreach (string pathin in pathins)
-                        {
-                            if (dir.Contains(pathin))
-                            {
-                                GetPainin = pathin;
-                                break;
-                            }
-                        }
-                        int HasNum = 0;
-                        foreach (string pathsame in pathsames)
-                        {
-                            if (dir.Contains(pathsame))
-                            {
-                                HasNum++;
-                            }
-                        }
-                        if (HasNum == pathsames.Length && GetPainin != null)
-                        {
-                            string[] files;
-                            try
-                            {
-                                files = Directory.GetFiles(dir, "*", SearchOption.TopDirectoryOnly);
-                            }
-                            catch
-                            {
-                                continue;
-                            }
-                            foreach (string file in files)
-                            {
-                                if (Path.GetFileName(file) == filename)
-                                {
-                                    result.Add(new FindOutFile
-                                    {
-                                        path_and_filename = file,
-                                        PathinGet = GetPainin,
-                                    });
-                                    findout = true;
-                                    break;
-                                }
-                            }
-                        }
-                        try
-                        {
-                            if (findout) continue;
-                            else if (Directory.GetDirectories(dir).Length != 0)
-                            {
-                                search_task.Add(Task.Run(() => SearchFileTask(dir, filename, onlysearches, pathins, pathsames, result)));
-                            }
-                        }
-                        catch { }
-                    }
-                }
-            }
-            */
+            public delegate void FDFoundDelegate(string FDPath);
             /// <summary>
             /// 将一个文件夹下的子文件（夹）复制到一个可以不为空的文件夹。
             /// </summary>
@@ -1740,7 +1288,7 @@ namespace OMCL_DLL.Tools
                 {
                     foreach (string f in files)
                     {
-                        if (File.Exists(destDirName + f.Replace(sourceDirName, ""))) 
+                        if (File.Exists(destDirName + f.Replace(sourceDirName, "")))
                         {
                             if (CanJump)
                             {
@@ -1765,8 +1313,10 @@ namespace OMCL_DLL.Tools
             /// <param name="fileName">一个string，表示文件夹中应有什么文件（文件名的关键词），默认null，表示不限定</param>
             /// <param name="filesp">[不填]路径分隔符，递归用</param>
             /// <returns>一个string的List，包含满足上述所有条件的文件夹路径</returns>
-            public static async Task<List<string>> SearchFoldersAsync(string folder, string keyword = null, string endwith = null, string fileName = null, char filesp = '\0')
+            public static async Task<List<string>> SearchFoldersAsync(string folder, string keyword = null, string endwith = null, string fileName = null, FDFoundDelegate OnFDFound = null, char filesp = '\0')
             {
+                //OMCLLog.WriteLog("Searching:" + folder, OMCLExceptionClass.DLL, OMCLExceptionType.Message);
+                List<string> result = new();
                 if (filesp == '\0')
                 {
                     if (GetSystemName() == "windows")
@@ -1778,12 +1328,11 @@ namespace OMCL_DLL.Tools
                         filesp = '/';
                     }
                 }
-                List<string> result = new List<string>();
-
                 try
                 {
+                    if (new DirectoryInfo(folder).Attributes.HasFlag(FileAttributes.ReparsePoint)) return new();
                     string[] subFolders = Directory.GetDirectories(folder);
-                    IEnumerable<Task<List<string>>> tasks = subFolders.Select(subFolder => Task.Run(() => SearchFoldersAsync(subFolder, keyword, endwith, fileName, filesp)));
+                    IEnumerable<Task<List<string>>> tasks = subFolders.Select(subFolder => Task.Run(() => SearchFoldersAsync(subFolder, keyword, endwith, fileName, OnFDFound, filesp)));
 
                     List<string>[] results = await Task.WhenAll(tasks);
 
@@ -1791,22 +1340,45 @@ namespace OMCL_DLL.Tools
                     {
                         result.AddRange(subResult);
                     }
+
+                    if ((endwith == null || folder.EndsWith(endwith.Replace('|', filesp))) && (keyword == null || folder.Contains(keyword.Replace('|', filesp))))
+                    {
+                        if (fileName != null || fileName != "")
+                        {
+                            string[] files = Directory.GetFiles(folder, "*", SearchOption.TopDirectoryOnly);
+                            bool IsOK = false;
+                            foreach (string file in files) if (file.Contains(fileName)) IsOK = true;
+                            if (IsOK)
+                            {
+                                result.Add(folder);
+                                _ = Task.Run(() =>
+                                {
+                                    try
+                                    {
+                                        OnFDFound(folder);
+                                    }
+                                    catch { }
+                                });
+                            }
+                        }
+                        else
+                        {
+                            result.Add(folder);
+                            _ = Task.Run(() =>
+                            {
+                                try
+                                {
+                                    OnFDFound(folder);
+                                }
+                                catch { }
+                            });
+                        }
+                    }
                 }
                 catch (Exception e)
                 {
                     OMCLLog.WriteLog("[Tools_FDTools_SearchDir]Error on searching [" + folder + "],keyword: [" + keyword + "],filename: [" + fileName + "]: " + e.Message, OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
-                }
-
-                if ((endwith == null || folder.EndsWith(endwith.Replace('|', filesp))) && (keyword == null || folder.Contains(keyword.Replace('|', filesp)))) 
-                {
-                    if (fileName != null || fileName != "")
-                    {
-                        if (Directory.GetFiles(folder, fileName, SearchOption.TopDirectoryOnly).Length != 0) result.Add(folder);
-                    }
-                    else
-                    {
-                        result.Add(folder);
-                    }
+                    //OMCLLog.WriteLog("[Tools_FDTools_SearchDir]Error on searching [" + folder + "],keyword: [" + keyword + "],filename: [" + fileName + "]: " + e, OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
                 }
 
                 return result;
@@ -1818,16 +1390,25 @@ namespace OMCL_DLL.Tools
             /// <param name="endwith">一个string，表示路径的结尾（可以用‘|’表示路径分隔符），默认null，表示不限定</param>
             /// <param name="fileName">一个string，表示文件夹中应有什么文件（文件名的关键词），默认null，表示不限定</param>
             /// <returns>一个string数组，包含满足上述所有条件的文件夹路径</returns>
-            public static async Task<string[]> SearchFoldersInDrivers(string keyword = null, string endwith = null, string fileName = null)
+            public static async Task<string[]> SearchFoldersInDrivers(string keyword = null, string endwith = null, string fileName = null, FDFoundDelegate OnFDFound = null)
             {
                 DriveInfo[] drives = DriveInfo.GetDrives();
-                List<Task<List<string>>> tasks = new List<Task<List<string>>>();
-                List<string> pre_results = new List<string>();
+                List<Task<List<string>>> tasks = new();
+                List<string> pre_results = new();
+                char filesp;
+                if (GetSystemName() == "windows")
+                {
+                    filesp = '\\';
+                }
+                else
+                {
+                    filesp = '/';
+                }
                 foreach (DriveInfo drive in drives)
                 {
                     tasks.Add(Task.Run(async () =>
                     {
-                        return await FDTools.SearchFoldersAsync(drive.RootDirectory.FullName, keyword, endwith, fileName);
+                        return await SearchFoldersAsync(drive.RootDirectory.FullName, keyword, endwith, fileName, OnFDFound, filesp);
                     }));
                 }
                 await Task.WhenAll(tasks);
@@ -1838,247 +1419,307 @@ namespace OMCL_DLL.Tools
                 return pre_results.ToArray();
             }
         }
-
         public class FindJava
         {
-            private static List<string> console;
-            private static readonly object addlock = new object();
+            private static List<Task> tasks;
+            private static List<JavaVersion> javas;
+            private static string javafile;
             /// <summary>
             /// 获取所有驱动器中的Java
             /// </summary>
             /// <returns>一个JavaVersion数组，包含每个Java的类型（jre、jdk）、版本和路径（以bin结尾，即*/bin或*\bin）</returns>
             public static async Task<JavaVersion[]> GetJavas()
             {
-                List<JavaVersion> javas = new List<JavaVersion>();
-                string[] pre_results = await FDTools.SearchFoldersInDrivers(null, "|bin", "javaw.exe");
-                foreach (string r in pre_results)
+                javas = new();
+                tasks = new();
+                string system = GetSystemName();
+                if (system == "windows")
+                {
+                    javafile = "java.exe";
+                    _ = await FDTools.SearchFoldersInDrivers(null, "|bin", "javaw.exe", OnFDFound);
+                    await Task.WhenAll(tasks);
+                }
+                else if (system == "linux")
+                {
+                    javafile = "java";
+                    _ = await FDTools.SearchFoldersAsync("/", null, "|bin", "java", OnFDFound, '/');
+                    await Task.WhenAll(tasks);
+                }
+                else
+                {
+
+                }
+                return javas.GroupBy(x => x.path).Select(y => y.First()).ToArray();
+                //return javas.ToArray();
+            }
+            private static void OnFDFound(string FDPath)
+            {
+                tasks.Add(Task.Run(() =>
                 {
                     try
                     {
-                        console = new List<string>();
-                        if (!File.Exists(Path.Combine(new string[] { r, "java.exe" })))
+                        OMCLLog.WriteLog("[Tools_FindJava]找到一个类似Java的文件夹：" + FDPath, OMCLExceptionClass.DLL, OMCLExceptionType.Message);
+                        string filename = Path.Combine(new string[] { FDPath, javafile });
+                        if (!File.Exists(filename))
                         {
-                            continue;
+                            OMCLLog.WriteLog("[Tools_FindJava]Warning: An exception appeared when trying to check java [" + FDPath + "]: Cannot find file [" + filename + "]!", OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
+                            return;
                         }
-                        Process process = new Process
+                        Process process = new()
                         {
                             StartInfo = new ProcessStartInfo
                             {
-                                FileName = Path.Combine(new string[] { r, "java.exe" }),
+                                FileName = filename,
                                 Arguments = "-version",
-                                WorkingDirectory = r,
+                                WorkingDirectory = FDPath,
                                 UseShellExecute = false,
                                 CreateNoWindow = true,
-                                RedirectStandardOutput = true,
+                                //RedirectStandardOutput = true,
                                 RedirectStandardError = true,
                             },
                         };
-                        process.OutputDataReceived += Process_OutputDataReceived;
-                        process.ErrorDataReceived += Process_OutputDataReceived;
-                        bool IsOK = true;
-                        await Task.WhenAll(Task.Run(() =>
+                        List<string> console = new();
+                        /*
+                        process.OutputDataReceived += new DataReceivedEventHandler((object sender, DataReceivedEventArgs e) =>
                         {
-                            if (!process.Start())
-                            {
-                                IsOK = false;
-                                return;
-                            }
-                            process.BeginErrorReadLine();
-                            process.BeginOutputReadLine();
-                            process.WaitForExit();
-                        }));
-                        if (!IsOK) continue;
-                        else
+                            console.Add(e.Data);
+                        });
+                        */
+                        process.ErrorDataReceived += new DataReceivedEventHandler((object sender, DataReceivedEventArgs e) =>
                         {
-                            string version = console[0].Split('\"')[1];
-                            JavaType type;
-                            if (console[1].Contains("JDK")) type = JavaType.jdk;
-                            else if (console[1].Contains("Java") && console[1].Contains("Runtime")) type = JavaType.jre;
-                            else type = JavaType.unknown;
-                            if (version == "" || version == null) continue;
-                            javas.Add(new JavaVersion
-                            {
-                                path = r,
-                                type = type,
-                                version = version,
-                            });
+                            //OMCLLog.WriteLog("[JAVA:" + FDPath + "]:" + (e.Data == null ? "空" : e.Data), OMCLExceptionClass.DLL, OMCLExceptionType.Message);
+                            console.Add(e.Data);
+                        });
+                        if (!process.Start())
+                        {
+                            OMCLLog.WriteLog("[Tools_FindJava]Warning: An exception appeared when trying to check java [" + FDPath + "]: The process cannot start!", OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
+                            return;
                         }
+                        /*try
+                        {*/
+                            process.BeginErrorReadLine();
+                            //process.BeginOutputReadLine();
+                            process.WaitForExit();
+                        /*}
+                        catch { }*/
+                        string version = console[0].Split('\"')[1];
+                        JavaType type;
+                        if (console[1].Contains("JDK")) type = JavaType.jdk;
+                        else if (console[1].Contains("Java") && console[1].Contains("Runtime")) type = JavaType.jre;
+                        else type = JavaType.unknown;
+                        if (version == "" || version == null) return;
+                        javas.Add(new JavaVersion
+                        {
+                            path = FDPath,
+                            type = type,
+                            version = version,
+                        });
                     }
                     catch (Exception e)
                     {
-                        OMCLLog.WriteLog("[Tools_FindJava]Warning: An exception appeared when trying to check java [" + r + "]: " + e, OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
-                        continue;
+                        OMCLLog.WriteLog("[Tools_FindJava]Warning: An exception appeared when trying to check java [" + FDPath + "]: " + e, OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
+                        throw new OMCLException("Error: " + e.Message, e);
                     }
-                }
-                return javas.ToArray();
-            }
-            private static void Process_OutputDataReceived(object sender, DataReceivedEventArgs e)
-            {
-                lock (addlock) console.Add(e.Data);
+                }));
             }
         }
     }
     public class Link
     {
-        public static List<Process> LinkProcess = new List<Process>();
-        public static readonly string[] servers = { "frp.104300.xyz", "la.afrps.cn" };
-        public static readonly string[] server_tokens = { "www.126126.xyz", "afrps.cn" };
+        public static List<Process> LinkProcess = new();
+        public static readonly string[] servers = { "la.afrps.cn" };
+        public static readonly string[] server_tokens = { "afrps.cn" };
         public static string FrpcIni = "[common]\nserver_addr = {server_url}\nserver_port = {server_port}\ntoken = {server_token}\n\n[{link_name}]\ntype = tcp\nlocal_ip = 127.0.0.1\nlocal_port = {client_port}\nremote_port = {random_num}";
-        public static string StartLink(int client_port)
+        public static async Task<string> StartLink(int client_port)
         {
-            int ser = 0;
-            long pingms = 10005;
-            for (int i = 0; i < servers.Length; i++)
-            {
-                PingReply reply;
-                try
-                {
-                    reply = new Ping().Send(servers[i], (int)pingms);
-                }
-                catch
-                {
-                    reply = null;
-                }
-                if (reply != null)
-                {
-                    if (reply.RoundtripTime < pingms)
-                    {
-                        pingms = reply.RoundtripTime;
-                        ser = i;
-                    }
-                }
-            }
-            return StartLink(client_port, ser);
+            return await StartLink(client_port, 0);
         }
-        public static string StartLink(int client_port, int server_id)
+        public static async Task<string> StartLink(int client_port, int server_id)
         {
-            return StartLink(client_port, servers[server_id], 7000, server_tokens[server_id]);
+            return await StartLink(client_port, servers[server_id], 7000, server_tokens[server_id]);
         }
         [STAThread]
-        public static string StartLink(int client_port, string server_url, int server_port, string server_token)
+        public static async Task<string> StartLink(int client_port, string server_url, int server_port, string server_token)
         {
-            PingReply reply;
-            int trynum = 0;
-        ping:
             try
             {
-                reply = new Ping().Send(server_url, 5000);
+                Directory.CreateDirectory(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link" }));
             }
-            catch (Exception e)
+            catch { }
+            //if (!File.Exists(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "LICENSE" }))) File.WriteAllBytes(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "LICENSE" }), Properties.Resources.link_LICENSE);
+            if (!File.Exists(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.exe" }))) throw new NoClassFileException("联机", "frpc.exe", "https://github.com/fatedier/frp/releases"); //File.WriteAllBytes(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.exe" }), Properties.Resources.link_frpc);
+            Random random = new();
+            int r;
+            while (true)
             {
-                OMCLLog.WriteLog("[Tools_Link_StartLink]错误：请求服务器<" + server_url + ">响应时出现问题！<" + e.Message + ">", OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
-                throw new OMCLException("错误：请求服务器<" + server_url + ">响应时出现未知问题！请检查服务器ip或url是否正确！", e);
-            }
-            if (reply.Status == IPStatus.Success)
-            {
-                OMCLLog.WriteLog("[Tools_Link_StartLink]联机-server status：Got server result at " + DateTime.Now.ToString() + " by " + reply.RoundtripTime + " ms", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
+                r = random.Next(10005, 59005);
+                File.WriteAllText(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.ini" }), FrpcIni.Replace("{server_url}", server_url).Replace("{server_port}", server_port.ToString()).Replace("{server_token}", server_token).Replace("{link_name}", $"OMCL_Link_{Process.GetProcessesByName("frpc").Length}").Replace("{client_port}", client_port.ToString()).Replace("{random_num}", r.ToString()));
+                Process p = new()
+                {
+                    StartInfo = new()
+                    {
+                        FileName = Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.exe" }),
+                        Arguments = "-c \"" + Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.ini" }) + '\"',
+                        CreateNoWindow = true,
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        WorkingDirectory = Path.Combine(new string[] { Tools.Dir, "OMCL", "Link" }),
+                    },
+                };
+                bool IsOK = false;
+                bool ShouldReset = false;
+                p.OutputDataReceived += new DataReceivedEventHandler((object sender, DataReceivedEventArgs e) =>
+                {
+                    OMCLLog.WriteLog("[Tools_Link_StartLink]捕获到内网穿透（frpc.exe）的控制台输出：" + e.Data, OMCLExceptionClass.DLL, OMCLExceptionType.Message);
+                    if (e.Data.Contains("start proxy success"))
+                    {
+                        IsOK = true;
+                    }
+                    else if (e.Data.Contains("control.go"))
+                    {
+                        ShouldReset = true;
+                    }
+                    else if (e.Data.Contains("connect to server error"))
+                    {
+                        OMCLLog.WriteLog("[Tools_Link_StartLink]错误：启动内网穿透（frpc.exe）服务时出现错误！无法连接到服务器！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
+                        throw new OMCLException("启动内网穿透（frpc.exe）服务时出现错误！无法连接到服务器！");
+                    }
+                });
+                p.ErrorDataReceived += new DataReceivedEventHandler((object sender, DataReceivedEventArgs e) =>
+                {
+                    OMCLLog.WriteLog("[Tools_Link_StartLink]捕获到内网穿透（frpc.exe）的控制台输出：" + e.Data, OMCLExceptionClass.DLL, OMCLExceptionType.Message);
+                    if (e.Data.Contains("start proxy success"))
+                    {
+                        IsOK = true;
+                    }
+                    else if (e.Data.Contains("control.go"))
+                    {
+                        ShouldReset = true;
+                    }
+                    else if (e.Data.Contains("connect to server error"))
+                    {
+                        OMCLLog.WriteLog("[Tools_Link_StartLink]错误：启动内网穿透（frpc.exe）服务时出现错误！无法连接到服务器！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
+                        throw new OMCLException("启动内网穿透（frpc.exe）服务时出现错误！无法连接到服务器！");
+                    }
+                });
+                p.Start();
+                p.BeginErrorReadLine();
+                p.BeginOutputReadLine();
+                await Task.WhenAny(Task.Run(() =>
+                {
+                    while (!IsOK && !ShouldReset) ;
+                }));
+                if (IsOK) break;
+                /*
                 try
                 {
-                    Directory.CreateDirectory(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link" }));
-                }
-                catch { }
-                //if (!File.Exists(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "LICENSE" }))) File.WriteAllBytes(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "LICENSE" }), Properties.Resources.link_LICENSE);
-                if (!File.Exists(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.exe" }))) throw new NoClassFileException("联机", "frpc.exe", "https://github.com/fatedier/frp/releases"); //File.WriteAllBytes(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.exe" }), Properties.Resources.link_frpc);
-                Random random = new Random();
-                int r;
-                while (true)
-                {
-                    try
+                    r = random.Next(10005, 59005);
+                    File.WriteAllText(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.ini" }), FrpcIni.Replace("{server_url}", server_url).Replace("{server_port}", server_port.ToString()).Replace("{server_token}", server_token).Replace("{link_name}", $"OMCL_Link_{Process.GetProcessesByName("frpc").Length}").Replace("{client_port}", client_port.ToString()).Replace("{random_num}", r.ToString()));
+                    using (Process process = new()
                     {
-                        r = random.Next(10005, 59005);
-                        File.WriteAllText(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.ini" }), FrpcIni.Replace("{server_url}", server_url).Replace("{server_port}", server_port.ToString()).Replace("{server_token}", server_token).Replace("{link_name}", $"OMCL_Link_{Process.GetProcessesByName("frpc").Length}").Replace("{client_port}", client_port.ToString()).Replace("{random_num}", r.ToString()));
-                        using (Process process = new Process
+                        StartInfo = new ProcessStartInfo
                         {
-                            StartInfo = new ProcessStartInfo
-                            {
-                                FileName = Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.exe" }),
-                                Arguments = "-c \"" + Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.ini" }) + '\"',
-                                CreateNoWindow = true,
-                                UseShellExecute = false,
-                                RedirectStandardOutput = true,
-                            },
-                        })
+                            FileName = Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.exe" }),
+                            Arguments = "-c \"" + Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.ini" }) + '\"',
+                            CreateNoWindow = true,
+                            UseShellExecute = false,
+                            RedirectStandardOutput = true,
+                        },
+                    })
+                    {
+                        LinkProcess.Add(process);
+                        process.Start();
+                        using (StreamReader reader = process.StandardOutput)
                         {
-                            LinkProcess.Add(process);
-                            process.Start();
-                            using (StreamReader reader = process.StandardOutput)
+                            bool IsOK = false;
+                            while (true)
                             {
-                                bool IsOK = false;
-                                while (true)
+                                string s = reader.ReadLine();
+                                OMCLLog.WriteLog("[Tools_Link_StartLink]捕获到内网穿透（frpc.exe）的控制台输出：" + s, OMCLExceptionClass.DLL, OMCLExceptionType.Message);
+                                if (s == null && process.HasExited)
                                 {
-                                    string s = reader.ReadLine();
-                                    if (s == null && process.HasExited)
-                                    {
-                                        OMCLLog.WriteLog("[Tools_Link_StartLink]错误：启动内网穿透（frpc.exe）服务时出现问题！进程已退出！", OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
-                                        throw new OMCLException("启动内网穿透（frpc.exe）服务时出现问题！进程已退出！");
-                                    }
-                                    else if (s == null)
-                                    {
-                                        StopLink();
-                                        OMCLLog.WriteLog("[Tools_Link_StartLink]错误：启动内网穿透（frpc.exe）服务时出现未知问题！", OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
-                                        throw new OMCLException("启动内网穿透（frpc.exe）服务时出现未知问题！");
-                                    }
-                                    else if (s.Contains("control.go:172") && s.Contains("start proxy success"))
-                                    {
-                                        IsOK = true;
-                                        break;
-                                    }
-                                    else if (s.Contains("control.go"))
-                                    {
-                                        break;
-                                    }
+                                    OMCLLog.WriteLog("[Tools_Link_StartLink]错误：启动内网穿透（frpc.exe）服务时出现问题！进程已退出！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
+                                    throw new OMCLException("启动内网穿透（frpc.exe）服务时出现问题！进程已退出！");
                                 }
-                                if (IsOK) break;
+                                else if (s == null)
+                                {
+                                    StopLink();
+                                    OMCLLog.WriteLog("[Tools_Link_StartLink]错误：启动内网穿透（frpc.exe）服务时出现未知问题！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
+                                    throw new OMCLException("启动内网穿透（frpc.exe）服务时出现未知问题！");
+                                }
+                                else if (s.Contains("connect to server error"))
+                                {
+                                    OMCLLog.WriteLog("[Tools_Link_StartLink]错误：启动内网穿透（frpc.exe）服务时出现错误！无法连接到服务器！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
+                                    throw new OMCLException("启动内网穿透（frpc.exe）服务时出现错误！无法连接到服务器！");
+                                }
+                                else if (s.Contains("control.go:172") && s.Contains("start proxy success"))
+                                {
+                                    IsOK = true;
+                                    break;
+                                }
+                                else if (s.Contains("control.go"))
+                                {
+                                    break;
+                                }
                             }
+                            if (IsOK) break;
                         }
                     }
-                    catch (Exception e)
-                    {
-                        OMCLLog.WriteLog("[Tools_Link_StartLink]错误：启动内网穿透（frpc.exe）服务时出现问题<" + e.Message + ">！请检查！", OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
-                        throw new OMCLException("错误：启动内网穿透（frpc.exe）服务时出现问题！请检查！", e);
-                    }
                 }
-                try
+                catch (Exception e)
                 {
-                    File.Delete(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.ini" }));
+                    OMCLLog.WriteLog("[Tools_Link_StartLink]错误：启动内网穿透（frpc.exe）服务时出现问题<" + e.Message + ">！请检查！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
+                    throw new OMCLException("错误：启动内网穿透（frpc.exe）服务时出现问题！请检查！", e);
                 }
-                catch { }
-                bool flag = false;
-                int server_id = -1;
-                for (int i = 0;i < servers.Length;i++)
-                {
-                    if (server_url == servers[i])
-                    {
-                        flag = true;
-                        server_id = i;
-                    }
-                }
-                string result;
-                if (flag)
-                {
-                    result = server_id.ToString() + r.ToString();
-                }
-                else
-                {
-                    result = Convert.ToBase64String(Encoding.Default.GetBytes(server_url)) + "!" + Convert.ToBase64String(Encoding.Default.GetBytes(r.ToString()));
-                }
-                Thread thr = new Thread(new ThreadStart(() => Clipboard.SetText(result)));
-                thr.SetApartmentState(ApartmentState.STA);
-                thr.IsBackground = true;
-                thr.Start();
-                return result;
+                */
             }
-            else if (trynum <= 3)
+            try
             {
-                trynum++;
-                goto ping;
+                File.Delete(Path.Combine(new string[] { Tools.Dir, "OMCL", "Link", "frpc.ini" }));
+            }
+            catch { }
+            bool flag = false;
+            int server_id = -1;
+            for (int i = 0; i < servers.Length; i++)
+            {
+                if (server_url == servers[i])
+                {
+                    flag = true;
+                    server_id = i;
+                }
+            }
+            string result;
+            if (flag)
+            {
+                result = server_id.ToString() + r.ToString();
             }
             else
             {
-                OMCLLog.WriteLog("[Tools_Link_StartLink]错误：请求服务器<" + server_url + ">响应时出现问题！<" + reply.Status.ToString() + ">", OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
-                throw new OMCLException("错误：请求服务器<" + server_url + ">响应时出现问题！<" + reply.Status.ToString() + ">");
+                result = Convert.ToBase64String(Encoding.Default.GetBytes(server_url)) + "!" + Convert.ToBase64String(Encoding.Default.GetBytes(r.ToString()));
             }
+            await Tools.clipboard.SetTextAsync(result);
+            /*
+            Thread thread = new(() =>
+            {
+                try
+                {
+                    Clipboard.SetText(result);
+                }
+                catch (Exception e)
+                {
+                    OMCLLog.WriteLog("Error on setting text into the chipboard:" + e, OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
+                }
+            })
+            {
+                IsBackground = true,
+            };
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) thread.SetApartmentState(ApartmentState.STA);
+            thread.Start();
+            */
+            return result;
         }
+
         public static void StopLink()
         {
             foreach (Process p in LinkProcess)
@@ -2101,7 +1742,7 @@ namespace OMCL_DLL.Tools
                     return new Server
                     {
                         server_url_or_ip = servers[int.Parse(sp[0][0].ToString())],
-                        server_port = int.Parse(sp[0].Remove(0,1)),// int.Parse(sp[0].Replace(sp[0][0].ToString(),"")),
+                        server_port = int.Parse(sp[0].Remove(0, 1)),// int.Parse(sp[0].Replace(sp[0][0].ToString(),"")),
                     };
                 }
                 else
@@ -2122,6 +1763,7 @@ namespace OMCL_DLL.Tools
     }
     public class SettingsAndRegistry
     {
+        /*
         /// <summary>
         /// 从注册表中获取已安装的Java列表
         /// </summary>
@@ -2179,13 +1821,13 @@ namespace OMCL_DLL.Tools
             }
             return javas.ToArray();
         }
+        */
     }
     public class GetLogin
     {
         public class MicrosoftLogin
         {
-            public delegate void GetCodeDelegate(string code);
-            public static event GetCodeDelegate Oauth2_OnGetCode;
+            public static event MicrosoftLogin2_oauth2.GetCodeDelegate Oauth2_OnGetCode;
             public class NewLogin
             {
                 public static void OpenLoginUrl(bool IsAuto = true)
@@ -2197,32 +1839,46 @@ namespace OMCL_DLL.Tools
                 /// </summary>
                 /// <param name="url">从用户浏览器中获取的返回url</param>
                 /// <returns>一个MicrosoftLoginResult，其中包含玩家的名字，uuid，refresh_token等信息</returns>
-                public static MicrosoftLoginResult LoginByCode(string url)
+                public static async Task<MicrosoftLoginResult> LoginByCode(string url)
                 {
-                    return Login.MicrosoftLogin.MicrosoftLogin.Login(url);
+                    return await Login.MicrosoftLogin.MicrosoftLogin.Login(url);
                 }
             }
             /// <summary>
             /// （旧方法）使用oauth2的device_code登录一个Microsoft账号
             /// </summary>
             /// <returns>一个MicrosoftLoginResult，其中包含玩家的名字，uuid，refresh_token等信息</returns>
-            public static MicrosoftLoginResult DCLogin()
+            public static async Task<MicrosoftLoginResult> DCLogin()
             {
                 MicrosoftLogin2_oauth2.OnGetCode += MicrosoftLogin2_oauth2_OnGetCode;
-                return MicrosoftLogin2_oauth2.Login();
+                return await MicrosoftLogin2_oauth2.Login();
             }
             /// <summary>
             /// 刷新MicrosoftLogin
             /// </summary>
             /// <param name="login">一个MicrosoftLoginResult，其中包含玩家的名字，uuid，refresh_token等信息</param>
             /// <returns>一个新的MicrosoftLoginResult，其中包含刷新过的玩家的名字，uuid，refresh_token等信息</returns>
-            public static MicrosoftLoginResult RefreshLogin(MicrosoftLoginResult login)
+            public static async Task<MicrosoftLoginResult> RefreshLogin(MicrosoftLoginResult login)
             {
-                return Login.MicrosoftLogin.MicrosoftLogin.RefreshLogin(login);
+                return await Login.MicrosoftLogin.MicrosoftLogin.RefreshLogin(login);
             }
-            private static void MicrosoftLogin2_oauth2_OnGetCode(string code)
+            /// <summary>
+            /// 刷新MicrosoftLogin
+            /// </summary>
+            /// <param name="token">即refresh_token，用来刷新登录，一般存储在MicrosoftLoginResult中</param>
+            /// <param name="IsNew">指示该登录使用的是LoginByCode还是DCLogin，前者为true</param>
+            /// <returns>一个新的MicrosoftLoginResult，其中包含刷新过的玩家的名字，uuid，refresh_token等信息</returns>
+            public static async Task<MicrosoftLoginResult> RefreshLogin(string token, bool IsNew)
             {
-                Oauth2_OnGetCode(code);
+                return await Login.MicrosoftLogin.MicrosoftLogin.RefreshLogin(new()
+                {
+                    refresh_token = token,
+                    IsNew = IsNew,
+                });
+            }
+            private static void MicrosoftLogin2_oauth2_OnGetCode(string code, string verification_uri, string message)
+            {
+                Oauth2_OnGetCode(code, verification_uri, message);
             }
         }
         /// <summary>
@@ -2231,9 +1887,9 @@ namespace OMCL_DLL.Tools
         /// <param name="user">拥有Minecraft的电子邮箱地址或玩家名称</param>
         /// <param name="password">密码</param>
         /// <returns>一个MojangLoginResult，其中包含玩家的名字，uuid，access_token等信息</returns>
-        public static MojangLoginResult MojangLogin(string user, string password)
+        public static async Task<MojangLoginResult> MojangLogin(string user, string password)
         {
-            JObject o = JObject.Parse(Web.Post("https://authserver.mojang.com/authenticate", "{\"agent\": {\"name\": \"Minecraft\",\"version\": 1},\"username\": \"" + user + "\",\"password\": \"" + password + "\"}", "application/json"));
+            JObject o = JObject.Parse(await Web.Post("https://authserver.mojang.com/authenticate", "{\"agent\": {\"name\": \"Minecraft\",\"version\": 1},\"username\": \"" + user + "\",\"password\": \"" + password + "\"}", "application/json"));
             if (o.SelectToken("selectedProfile.id") == null || o.SelectToken("selectedProfile.name") == null)
             {
                 OMCLLog.WriteLog("[GetLogin_MojangLogin]失败！该账号可能不拥有Minecraft！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
@@ -2251,9 +1907,9 @@ namespace OMCL_DLL.Tools
         /// </summary>
         /// <param name="access_token">一个从MojangLogin函数或上次调用该函数时的MojangLoginResult中的access_token</param>
         /// <returns>一个MojangLoginResult，其中包含玩家的名字，uuid，access_token等信息</returns>
-        public static MojangLoginResult RefreshMojangLogin(string access_token)
+        public static async Task<MojangLoginResult> RefreshMojangLogin(string access_token)
         {
-            JObject o = JObject.Parse(Web.Post("https://authserver.mojang.com/refresh", "{\"accessToken\": \"" + access_token + "\"}", "application/json"));
+            JObject o = JObject.Parse(await Web.Post("https://authserver.mojang.com/refresh", "{\"accessToken\": \"" + access_token + "\"}", "application/json"));
             if (o.SelectToken("selectedProfile.id") == null || o.SelectToken("selectedProfile.name") == null)
             {
                 OMCLLog.WriteLog("[GetLogin_MojangLogin]失败！该账号可能不拥有Minecraft！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
@@ -2273,9 +1929,9 @@ namespace OMCL_DLL.Tools
         /// <param name="user">电子邮箱地址或玩家名称</param>
         /// <param name="password">密码</param>
         /// <returns>一个UnifiedPassLoginResult，其中包含玩家的名字，uuid，access_token等信息</returns>
-        public static UnifiedPassLoginResult UnifiedPassLogin(string serverid, string user, string password)
+        public static async Task<UnifiedPassLoginResult> UnifiedPassLogin(string serverid, string user, string password)
         {
-            JObject o = JObject.Parse(Web.Post("https://auth.mc-user.com:233/" + serverid + "/authserver/authenticate", "{\"username\": \"" + user + "\",\"password\": \"" + password + "\"}", "application/json"));
+            JObject o = JObject.Parse(await Web.Post("https://auth.mc-user.com:233/" + serverid + "/authserver/authenticate", "{\"username\": \"" + user + "\",\"password\": \"" + password + "\"}", "application/json"));
             if (o.SelectToken("selectedProfile.id") == null || o.SelectToken("selectedProfile.name") == null)
             {
                 OMCLLog.WriteLog("[GetLogin_UnifiedPassLogin]失败！该账号可能错误！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
@@ -2296,9 +1952,9 @@ namespace OMCL_DLL.Tools
         /// <param name="serverid">UnifiedPass服务器的id</param>
         /// <param name="access_token">一个从UnifiedPassLogin函数或上次调用该函数时的UnifiedPassLoginResult中的access_token</param>
         /// <returns>一个UnifiedPassLoginResult，其中包含玩家的名字，uuid，access_token等信息</returns>
-        public static UnifiedPassLoginResult RefreshUnifiedPassLogin(string serverid, string clientToken, string access_token)
+        public static async Task<UnifiedPassLoginResult> RefreshUnifiedPassLogin(string serverid, string clientToken, string access_token)
         {
-            JObject o = JObject.Parse(Web.Post("https://auth.mc-user.com:233/" + serverid + "/authserver/refresh", "{\"accessToken\": \"" + access_token + "\",\"clientToken\": \"" + clientToken + "\"}", "application/json"));
+            JObject o = JObject.Parse(await Web.Post("https://auth.mc-user.com:233/" + serverid + "/authserver/refresh", "{\"accessToken\": \"" + access_token + "\",\"clientToken\": \"" + clientToken + "\"}", "application/json"));
             if (o.SelectToken("selectedProfile.id") == null || o.SelectToken("selectedProfile.name") == null)
             {
                 OMCLLog.WriteLog("[GetLogin_RefreshUnifiedPassLogin]失败！该账号可能错误！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
@@ -2319,9 +1975,9 @@ namespace OMCL_DLL.Tools
         /// <param name="user">电子邮箱地址或玩家名称</param>
         /// <param name="password">密码</param>
         /// <returns>一个AuthlibInjectorLoginResult，其中包含玩家的名字，uuid，access_token等信息</returns>
-        public static AuthlibInjectorLoginResult AuthlibInjectorLogin(string server, string user, string password)
+        public static async Task<AuthlibInjectorLoginResult> AuthlibInjectorLogin(string server, string user, string password)
         {
-            JObject o = JObject.Parse(Web.Post(server + "/authserver/authenticate", "{\"username\":\"" + user + "\",\"password\":\"" + password + "\",\"agent\":{\"name\":\"Minecraft\",\"version\":1}}", "application/json"));
+            JObject o = JObject.Parse(await Web.Post(server + "/authserver/authenticate", "{\"username\":\"" + user + "\",\"password\":\"" + password + "\",\"agent\":{\"name\":\"Minecraft\",\"version\":1}}", "application/json"));
             if (o.SelectToken("selectedProfile.id") == null || o.SelectToken("selectedProfile.name") == null)
             {
                 List<AuthlibInjectorUser> users = new List<AuthlibInjectorUser>();
@@ -2370,9 +2026,9 @@ namespace OMCL_DLL.Tools
         /// </summary>
         /// <param name="login">一个AuthlibInjectorLoginResult</param>
         /// <returns>一个AuthlibInjectorLoginResult，其中包含玩家的名字，uuid，access_token等信息</returns>
-        public static AuthlibInjectorLoginResult RefreshAuthlibInjectorLogin(AuthlibInjectorLoginResult login)
+        public static async Task<AuthlibInjectorLoginResult> RefreshAuthlibInjectorLogin(AuthlibInjectorLoginResult login)
         {
-            JObject o = JObject.Parse(Web.Post(login.server + "/authserver/refresh", "{\"accessToken\":\"" + login.access_token + "\"}", "application/json"));
+            JObject o = JObject.Parse(await Web.Post(login.server + "/authserver/refresh", "{\"accessToken\":\"" + login.access_token + "\"}", "application/json"));
             return new AuthlibInjectorLoginResult
             {
                 access_token = o.SelectToken("accessToken").ToString(),
@@ -2387,11 +2043,11 @@ namespace OMCL_DLL.Tools
         /// </summary>
         /// <param name="name">离线玩家名称</param>
         /// <returns>一个OfflineLoginResult，其中包含玩家的名字和uuid</returns>
-        public static OfflineLoginResult OfflineLogin(string name)
+        public static async Task<OfflineLoginResult> OfflineLogin(string name)
         {
             try
             {
-                string result = Web.Get("https://api.mojang.com/users/profiles/minecraft/" + name);
+                string result = await Web.Get("https://api.mojang.com/users/profiles/minecraft/" + name);
                 if (result == "" || result == null || result == string.Empty)
                 {
                     return new OfflineLoginResult
@@ -2443,6 +2099,7 @@ namespace OMCL_DLL.Tools
     {
         public class ForgeInstall
         {
+            //Coding,don't use or forget it!!!!!!!!!
             public static void InstallForge(string version, string forgeFile)
             {
                 char filesp;
@@ -2462,18 +2119,19 @@ namespace OMCL_DLL.Tools
                 Directory.CreateDirectory(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp" }));
                 Tools.UnZipFile(forgeFile, Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp" }) + filesp, true);
                 JArray Narguments;
-                string NminecraftArguments;
+                //string NminecraftArguments;
                 JArray Nlibraries;
                 JArray Njvm;
-                string mainClass;
-                if (File.Exists(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", "version.json" }))) Tools.ReadVersionJson(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", "version.json" }), out Narguments, out NminecraftArguments, out Nlibraries, out Njvm, out mainClass, false);
-                else if (File.Exists(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", "install_profile.json" }))) Tools.ReadVersionJson(JObject.Parse(File.ReadAllText(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", "install_profile.json" }))).SelectToken("versionInfo").ToString(), out Narguments, out NminecraftArguments, out Nlibraries, out Njvm, out mainClass, true);
+                Version forge_version_json;
+                if (File.Exists(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", "version.json" }))) forge_version_json = Tools.ReadVersionJson(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", "version.json" }), out Narguments, out Nlibraries, out Njvm);
+                else if (File.Exists(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", "install_profile.json" }))) forge_version_json = Tools.ReadVersionJson(JObject.Parse(File.ReadAllText(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", "install_profile.json" }))).SelectToken("versionInfo").ToString(), out Narguments, out Nlibraries, out Njvm);
                 else
                 {
                     return;
                 }
-                Tools.ReadVersionJson(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", version, version + ".json" }), out JArray arguments, out _, out JArray libraries, out JArray jvm, out _, false);
+                _ = Tools.ReadVersionJson(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", version, version + ".json" }), out JArray arguments, out JArray libraries, out JArray jvm);
                 JObject o = JObject.Parse(File.ReadAllText(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", version, version + ".json" })));
+                /*
                 if (NminecraftArguments == "" || NminecraftArguments == null)
                 {
                     arguments.Merge(Narguments);
@@ -2483,6 +2141,7 @@ namespace OMCL_DLL.Tools
                 {
                     o["minecraftArguments"] = NminecraftArguments;
                 }
+                */
                 if (jvm != null && Njvm != null)
                 {
                     jvm.Merge(Njvm);
@@ -2490,7 +2149,7 @@ namespace OMCL_DLL.Tools
                 }
                 libraries.Merge(Nlibraries);
                 o.SelectToken("libraries").Replace(libraries);
-                o["mainClass"] = mainClass;
+                o["mainClass"] = forge_version_json.mainClass;
                 File.WriteAllText(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", version, version + ".json" }), o.ToString());
                 try
                 {
@@ -2501,197 +2160,24 @@ namespace OMCL_DLL.Tools
         }
         public class MinecraftInstall
         {
-            public static void InstallMinecraftVersion(string versionName, string installName, bool IsDownloadLibraries = true, bool IsDownloadAssets = false)
+            public static async Task InstallMinecraftVersion(string versionName, string installName, bool IsDownloadLibraries = true, bool IsDownloadAssets = false)
             {
                 Directory.CreateDirectory(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", versionName }));
-                if (!File.Exists(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", versionName, versionName + ".json" }))) File.WriteAllText(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", versionName, versionName + ".json" }), Web.Get(Tools.DownloadMinecraftFileUrl + @"version/" + installName + @"/json"));
-                if (!File.Exists(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", versionName, versionName + ".jar" }))) HttpFile.Start(Tools.DownloadThreadNum, Tools.DownloadMinecraftFileUrl + @"version/" + installName + @"/client", Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", versionName, versionName + ".jar" }));
-                if (IsDownloadLibraries) Tools.DownloadMissFiles(versionName, false);
+                JObject vi = JObject.Parse(await Web.Get(Tools.MCFileDownloadServer.VersionInfo[1]));
+                JArray vis = (JArray)vi.SelectToken("versions");
+                string vjurl = null;
+                foreach (JToken vip in vis)
+                {
+                    if (vip.SelectToken("id").ToString() == installName) vjurl = vip.SelectToken("url").ToString();
+                    //if (vip.Value.SelectToken("id").ToString() == installName) vjurl = vip.Value.SelectToken("url").ToString();
+                }
+                string json = await Web.Get(vjurl);
+                if (!File.Exists(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", versionName, versionName + ".json" }))) File.WriteAllText(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", versionName, versionName + ".json" }), json);
+                string ujar = JObject.Parse(json).SelectToken("downloads.client.url").ToString();
+                if (!File.Exists(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", versionName, versionName + ".jar" }))) HttpFile.Start(Tools.DownloadThreadNum, ujar, Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", versionName, versionName + ".jar" }));
+                if (IsDownloadLibraries) Tools.DownloadMissFiles(Tools.ReadVersionJson(versionName));
                 if (IsDownloadAssets) Tools.DownloadMissAsstes(versionName);
             }
         }
-        //不可使用（作废）
-        /*public class ForgeInstall
-        {
-            private static string ForgeDataPathGet(string name)
-            {
-                string value = name;
-                if (value.Contains("[") && value.Contains("]"))
-                {
-                    if (value.Contains("@"))
-                    {
-                        string[] arr = value.Split(':');
-                        string arr0temp = arr[0].Replace("[", "");
-                        string temp = arr0temp.Replace('.', '\\');
-                        value = (temp + value.Replace("[" + arr0temp, "")).Replace("]", "").Replace(':', '\\').Replace('@', '.');
-                        //value = value.Split(':')[0].Replace('.', '\\') + value.Replace(value.Split(':')[0], "").Replace(':', '\\').Replace('@', '.').Replace("[", "").Replace("]", "");
-                    }
-                    else
-                    {
-                        string[] arr = value.Split(':');
-                        string arr0temp = arr[0].Replace("[", "");
-                        string temp = arr0temp.Replace('.','\\');
-                        value = temp + value.Replace("[" + arr0temp, "").Replace("]", "").Replace(':', '\\') + '\\' + arr[arr.Length - 2] + '-' + arr[arr.Length - 1].Replace("]","") + ".jar";
-                    }
-                    value = Tools.Dir + @"\.minecraft\libraries\" + value;
-                }
-                else if (value.Contains("/"))
-                {
-                    value = value.Replace('/', '\\');
-                    value = Path.GetTempPath() + @"\OMCL\temp\" + value;
-                }
-                return value;
-            }
-            private static string ForgeFilePathGet(string name)
-            {
-                string path = name;
-                string[] temppath = path.Split(':');
-                string temp = temppath[0].Replace('.', '\\');
-                path = temp + @"\" + path.Replace(temppath[0] + ":", "").Replace(':', '\\') + @"\" + temppath[temppath.Length - 2] + "-" + temppath[temppath.Length - 1] + ".jar";
-                return path;
-            }
-            public class ForgeDATA
-            {
-                public string name { get; internal set; }
-                public string value { get; internal set; }
-            }
-            public static void InstallForge(string java, string version, string ForgePath)
-            {
-                try
-                {
-                    if (Directory.Exists(Path.GetTempPath() + @"\OMCL\temp\")) Directory.Delete(Path.GetTempPath() + @"\OMCL\temp\", true);
-                    Directory.CreateDirectory(Path.GetTempPath() + @"\OMCL\temp\");
-                }
-                catch { }
-                Tools.UnZipFile(ForgePath, Path.GetTempPath() + @"\OMCL\temp\", true);
-                JObject o = JObject.Parse(File.ReadAllText(Path.GetTempPath() + @"\OMCL\temp\install_profile.json"));
-                JObject data = (JObject)JsonConvert.DeserializeObject(o.Value<JObject>("data").ToString());
-                List<ForgeDATA> datas = new List<ForgeDATA>();
-                foreach (JProperty property in data.Properties())
-                {
-                    datas.Add(new ForgeDATA
-                    {
-                        value = ForgeDataPathGet(data[property.Name]["client"].ToString()),
-                        name = property.Name,
-                    });
-                }
-                JArray libraries = (JArray)o.SelectToken("libraries");
-                if (!File.Exists(Tools.Dir + @"\.minecraft\versions\" + version + @"\" + version + ".json"))
-                {
-                    OMCLLog.WriteLog("[InstallMinecraft_InstallForge]安装Forge时出现错误：找不到版本json，该版本可能有问题！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                    throw new OMCLException("安装Forge时出现错误：找不到版本json，该版本可能有问题！", e);
-                }
-                JObject versionjson = JObject.Parse(File.ReadAllText(Tools.Dir + @"\.minecraft\versions\" + version + @"\" + version + ".json"));
-                JArray versionlibraries = (JArray)versionjson.SelectToken("libraries");
-                versionlibraries.Merge(libraries);
-                versionjson.Merge(versionlibraries);
-                File.WriteAllText(Tools.Dir + @"\.minecraft\versions\" + version + @"\" + version + ".json", versionjson.ToString());
-                JArray processors = (JArray)o.SelectToken("processors");
-                for (int i = 0; i < processors.Count; i++)
-                {
-                    Process process = new Process();
-                    JArray sides = (JArray)processors[i]["sides"];
-                    if (sides.Count != 0)
-                    {
-                        if (sides[0].ToString() == "server")
-                        {
-                            continue;
-                        }
-                    }
-                    string jar = processors[i]["jar"].ToString();
-                    string path = ForgeFilePathGet(jar);
-                    if (!File.Exists(Tools.Dir + @"\.minecraft\libraries\" + path))
-                    {
-                        try
-                        {
-                            HttpFile.Start(5, Tools.DownloadMinecraftFileUrl + "/libraries/" + path.Replace('\\', '/'), Tools.Dir + @"\.minecraft\libraries\" + path);
-                        }
-                        catch
-                        {
-                            try
-                            {
-                                HttpFile.Start(5, Tools.DownloadMinecraftFileUrl + "/libraries/" + path.Replace('\\', '/'), Tools.Dir + @"\.minecraft\libraries\" + path);
-                            }
-                            catch (Exception e)
-                            {
-                                OMCLLog.WriteLog("[InstallMinecraft_InstallForge]安装Forge时出现错误：下载文件 " + Tools.Dir + @"\.minecraft\libraries\" + path + " 时出现错误！" + @e.Message, OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                                throw new OMCLException("安装Forge时出现错误：下载文件 " + Tools.Dir + @"\.minecraft\libraries\" + path + " 时出现错误！", e);
-                            }
-                        }
-                    }
-                    string au = "";
-                    au += "-cp \"" + Tools.Dir + @"\.minecraft\libraries\" + path;
-                    JArray classpath = (JArray)processors[i].SelectToken("classpath");
-                    for (int j = 0; j < classpath.Count; j++)
-                    {
-                        string temp = ForgeFilePathGet(classpath[j].ToString());
-                        au += ';' + Tools.Dir + @"\.minecraft\libraries\" + temp;
-                        if (!File.Exists(Tools.Dir + @"\.minecraft\libraries\" + temp))
-                        {
-                            try
-                            {
-                                HttpFile.Start(5, Tools.DownloadMinecraftFileUrl + "libraries/" + temp.Replace('\\', '/'), Tools.Dir + @"\.minecraft\libraries\" + temp);
-                            }
-                            catch
-                            {
-                                try
-                                {
-                                    HttpFile.Start(5, Tools.DownloadMinecraftFileUrl + "libraries/" + temp.Replace('\\', '/'), Tools.Dir + @"\.minecraft\libraries\" + temp);
-                                }
-                                catch// (Exception e)
-                                {
-                                    continue;
-                                    /*OMCLLog.WriteLog("[InstallMinecraft_InstallForge]安装Forge时出现错误：下载文件 " + Tools.Dir + @"\.minecraft\libraries\" + temp + " 时出现错误！" + @e.Message, OMCLExceptionClass.DLL, OMCLExceptionType.Error);
-                                    throw new OMCLException("安装Forge时出现错误：下载文件 " + Tools.Dir + @"\.minecraft\libraries\" + temp + " 时出现错误！", e);*
-                                }
-                            }
-                        }
-                    }
-                    au += "\" ";
-                    if (path.Contains("SpecialSource"))
-                    {
-                        au += jar.Replace(':', '.').Replace('-', '_').ToLower() + ".SpecialSource ";
-                    }
-                    else
-                    {
-                        au += jar.Replace(':', '.') + ".ConsoleTool ";
-                    }
-                    JArray args = (JArray)processors[i].SelectToken("args");
-                    for (int j = 0;j < args.Count;j++)
-                    {
-                        string temp = args[j].ToString();
-                        if (temp.Contains("--"))
-                        {
-                            au += temp + " ";
-                        }
-                        else if (temp == "{MINECRAFT_JAR}")
-                        {
-                            au += "\"" + Tools.Dir + @"\.minecraft\versions\" + version + @"\" + version + ".jar" + "\" ";
-                        }
-                        else if (temp.Contains("{") && temp.Contains("}"))
-                        {
-                            string t = temp.Replace("{", "").Replace("}", "");
-                            for (int k = 0;k < datas.Count;k++)
-                            {
-                                if (datas[i].name == t)
-                                {
-                                    au += datas[i].value + " ";
-                                }
-                            }
-                        }
-                        else if (temp.Contains("[") && temp.Contains(']'))
-                        {
-                            string t = ForgeDataPathGet(temp);
-                            au += t + " ";
-                        }
-                    }
-                    process.StartInfo.FileName = java;
-                    process.StartInfo.Arguments = au;
-                    process.StartInfo.UseShellExecute = true;
-                    process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-                    process.Start();
-                }
-            }
-        }*/
     }
 }

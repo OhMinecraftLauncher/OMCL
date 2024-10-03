@@ -79,10 +79,10 @@ namespace OMCL_DLL.Tools
         public string Assets = "";
         public string Libraries = "";
         public string Java = "";
-        public string Forge = "";
         public string LiteLoader = "";
         public string Optifine = "";
         public string authlib_injector = "";
+        public string[] Forge = new string[2];
         public string[] Fabric = new string[2];
         public string[] NeoForge = new string[2];
         public string[] quilt = new string[2];
@@ -108,10 +108,14 @@ namespace OMCL_DLL.Tools
                 Assets = "https://resources.download.minecraft.net",
                 Libraries = "https://libraries.minecraft.net",
                 Java = "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json",
-                Forge = "https://files.minecraftforge.net/maven",
                 LiteLoader = "https://dl.liteloader.com/versions/versions.json",
                 Optifine = "",
                 authlib_injector = "https://authlib-injector.yushi.moe",
+                Forge = new string[2]
+                {
+                    "https://maven.minecraftforge.net",
+                    "https://files.minecraftforge.net/maven",
+                },
                 Fabric = new string[2]
                 {
                     "https://meta.fabricmc.net",
@@ -144,10 +148,14 @@ namespace OMCL_DLL.Tools
                 Assets = "https://bmclapi2.bangbang93.com/assets",
                 Libraries = "https://bmclapi2.bangbang93.com/maven",
                 Java = "https://bmclapi2.bangbang93.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json",
-                Forge = "https://bmclapi2.bangbang93.com/maven",
                 LiteLoader = "https://bmclapi2.bangbang93.com/maven/com/mumfrey/liteloader/versions.json",
                 Optifine = "https://bmclapi2.bangbang93.com/optifine",
                 authlib_injector = "https://bmclapi2.bangbang93.com/mirrors/authlib-injector",
+                Forge = new string[2]
+                {
+                    "https://bmclapi2.bangbang93.com/maven",
+                    "https://bmclapi2.bangbang93.com/maven",
+                },
                 Fabric = new string[2]
                 {
                     "https://bmclapi2.bangbang93.com/fabric-meta",
@@ -180,10 +188,14 @@ namespace OMCL_DLL.Tools
                 Assets = "https://download.mcbbs.net/assets",
                 Libraries = "https://download.mcbbs.net/maven",
                 Java = "https://download.mcbbs.net/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json",
-                Forge = "https://download.mcbbs.net/maven",
                 LiteLoader = "https://download.mcbbs.net/maven/com/mumfrey/liteloader/versions.json",
                 Optifine = "https://download.mcbbs.net/optifine",
                 authlib_injector = "https://download.mcbbs.net/mirrors/authlib-injector",
+                Forge = new string[2]
+                {
+                    "https://download.mcbbs.net/maven",
+                    "https://download.mcbbs.net/maven",
+                },
                 Fabric = new string[2]
                 {
                     "https://download.mcbbs.net/fabric-meta",

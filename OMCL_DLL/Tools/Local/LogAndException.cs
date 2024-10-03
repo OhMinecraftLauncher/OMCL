@@ -12,6 +12,7 @@ namespace OMCL_DLL.Tools
         private static readonly DateTime dt = DateTime.Now;
         private static StreamWriter streamWriter = null;
         public static string LogFile = null;
+        public static bool ConsoleOutputLog = true;
         public static void WriteLog(string message, OMCLExceptionClass Class, OMCLExceptionType type)
         {
             Task.Run(() =>
@@ -33,7 +34,7 @@ namespace OMCL_DLL.Tools
                     */
                     string s = "[" + DateTime.Now.ToString() + "][" + Class.ToString() + "][" + type.ToString() + "]:" + Regex.Replace(message, @"\\Users\\(.*?)\\", @"\Users\隐藏用户名\");
 #if DEBUG
-                    //Console.WriteLine(s);
+                    if (ConsoleOutputLog) Console.WriteLine(s);
 #endif
                     streamWriter.WriteLine(s);
                     streamWriter.Flush();

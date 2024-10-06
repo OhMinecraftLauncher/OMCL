@@ -33,7 +33,7 @@ namespace OMCL_DLL.Tools
     public class Tools
     {
         public static int DownloadThreadNum = 1;
-        public static DownloadServer MCFileDownloadServer = DownloadServers.MCFileDownloadServers[0];
+        public static DownloadServer MCFileDownloadServer = DownloadServers.MCFileDownloadServers[3];
         public static DownloadSource Source = DownloadSource.Minecraft;
         private static readonly string OMCLver = "0.0.0.3";
         public static string Dir = Directory.GetCurrentDirectory();
@@ -132,6 +132,123 @@ namespace OMCL_DLL.Tools
         /// </summary>
         /// <param name="version">版本名称</param>
         /// <param name="IsLaunch">是否是启动时地补全文件（如果是，下载失败的文件将自动列入LaunchNoFile或LaunchNoFileNatives，进行启动时跳过操作。如果否，文件下载失败将不会有任何反应，直接跳过下载下一个文件。）</param>
+        public static void DownloadMissFiles(string version)
+        {
+            Version ver = ReadVersionJson(Path.Combine(new string[] { Dir, ".minecraft", "versions", version, version + ".json" }), out _, out JArray libraries, out _);
+            string sysname = GetSystemName();
+            foreach (JToken lib in libraries)
+            {
+                bool cr = true;
+                try
+                {
+                    JArray rules = (JArray)lib.SelectToken("rules", true);
+                    cr = CheckRuleInJson(rules, sysname);
+                }
+                catch { }
+                if (cr)
+                {
+                    string name = lib.SelectToken("name").ToString();
+                    string url;
+                    if (lib.SelectToken("downloads.artifact.url") != null)
+                    {
+                        url = lib.SelectToken("downloads.artifact.url").ToString();
+                    }
+                    else if (lib.SelectToken("url") != null)
+                    {
+                        url = lib.SelectToken("url").ToString();
+                    }
+                    else
+                    {
+                        url = "https://libraries.minecraft.net/";
+                    }
+                    try
+                    {
+                        DownloadMissLibraries(name, url);
+                    }
+                    catch (Exception e)
+                    {
+                        if (e.Message.Contains("404"))
+                        {
+                            OMCLLog.WriteLog("[Tools_DownloadMissFiles]跳过文件 { " + name + " } 的下载！", OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
+                        }
+                        else
+                        {
+                            throw new OMCLException("文件下载失败！", e);
+                        }
+                    }
+                }
+            }
+            for (int i = 0; i < ver.natives.Length; i++)
+            {
+                if (!File.Exists(Path.Combine(new string[] { Dir, ".minecraft", "libraries", ver.natives[i] })))
+                {
+                    try
+                    {
+                        HttpFile.Start(DownloadThreadNum, MCFileDownloadServer.Libraries + '/' + ver.natives[i].Replace('\\', '/'), Path.Combine(new string[] { Dir, ".minecraft", "libraries", ver.natives[i] }));
+                    }
+                    catch (Exception e)
+                    {
+                        if (e.Message.Contains("404"))
+                        {
+                            OMCLLog.WriteLog("[Tools_DownloadMissFiles]跳过文件 " + Path.Combine(new string[] { Dir, ".minecraft", "libraries", ver.natives[i] }) + " 的下载！", OMCLExceptionClass.DLL, OMCLExceptionType.Warning);
+                        }
+                        else
+                        {
+                            throw new OMCLException("文件下载失败！", e);
+                        }
+                    }
+                }
+            }
+        }
+        public static void DownloadMissLibraries(string name_or_path, string url)
+        {
+            string name = name_or_path;
+            string path;
+            if (name.Contains('\\') || name.Contains('/'))
+            {
+                path = name;
+            }
+            else
+            {
+                /*
+                if (name.Contains("universal") || name.EndsWith(":all") || name.EndsWith(":api") || name.Split(':').Last().Contains("natives") || name.Split(':').Last().Contains("linux"))
+                {
+                    string value_last = name.Split(':').Last();
+                    path = GetPathFromName(name.Remove(name.Length - (value_last.Length + 1), value_last.Length + 1)).Replace(".jar", '-' + value_last + ".jar");
+                }
+                else
+                {
+                    path = GetPathFromName(name);
+                }
+                */
+                path = GetPathFromName(name);
+            }
+            if (!File.Exists(path))
+            {
+                try
+                {
+                    Directory.CreateDirectory(path.Replace(Path.GetFileName(path), ""));
+                }
+                catch { }
+                if (url.StartsWith(DownloadServers.MCFileDownloadServers[0].Forge[0]))
+                {
+                    HttpFile.Start(DownloadThreadNum, MCFileDownloadServer.Forge[0] + path.Replace(Path.Combine(new string[] { Dir, ".minecraft", "libraries" }), "").Replace('\\', '/'), path);
+                }
+                else if (url.StartsWith(DownloadServers.MCFileDownloadServers[0].NeoForge_Maven))
+                {
+                    HttpFile.Start(DownloadThreadNum, MCFileDownloadServer.NeoForge_Maven + path.Replace(Path.Combine(new string[] { Dir, ".minecraft", "libraries" }), "").Replace('\\', '/'), path);
+                }
+                else if (url.StartsWith(DownloadServers.MCFileDownloadServers[0].Libraries))
+                {
+                    HttpFile.Start(DownloadThreadNum, MCFileDownloadServer.Libraries + path.Replace(Path.Combine(new string[] { Dir, ".minecraft", "libraries" }), "").Replace('\\', '/'), path);
+                }
+                else
+                {
+
+                }
+            }
+        }
+        /*
         public static void DownloadMissFiles(Version ver)
         {
             try
@@ -229,6 +346,7 @@ namespace OMCL_DLL.Tools
                 throw new OMCLException("补全文件时出现错误！", e);
             }
         }
+        */
         /// <summary>
         /// 为一个版本补全Assets
         /// </summary>
@@ -432,6 +550,45 @@ namespace OMCL_DLL.Tools
                 throw new OMCLException("获取Java列表时出现错误！", e);
             }
         }
+        internal static string GetPathFromName(string name)
+        {
+            //bool name_at = false;
+            string name_after_at = null;
+            if (name.Contains('@'))
+            {
+                //name_at = true;
+                name_after_at = name.Split('@').Last();
+                name = name.Remove(name.Length - name_after_at.Length - 1, name_after_at.Length + 1);
+            }
+            string value_last = null;
+            try
+            {
+                int.Parse(name.Split(':').Last()[0].ToString());
+            }
+            catch
+            {
+                value_last = name.Split(':').Last();
+                name = name.Remove(name.Length - (value_last.Length + 1), value_last.Length + 1);
+            }
+            string[] name_sp = name.Split(':');
+            string[] name_sp0_sp = name_sp[0].Split('.');
+            List<string> name_path = new() { Dir, ".minecraft", "libraries" };
+            foreach (string name_sp0_sp_item in name_sp0_sp)
+            {
+                name_path.Add(name_sp0_sp_item);
+            }
+            for (int i = 1; i < name_sp.Length; i++)
+            {
+                name_path.Add(name_sp[i]);
+            }
+            name_path.Add(name_sp[^2] + '-' + name_sp[^1] + (name_after_at != null ? ('.' + name_after_at) : ".jar"));
+            string path = Path.Combine(name_path.ToArray());
+            if (value_last != null)
+            {
+                path = path.Replace(name_after_at != null ? ('.' + name_after_at) : ".jar", '-' + value_last + (name_after_at != null ? ('.' + name_after_at) : ".jar"));
+            }
+            return path;
+        }
         private static void UnzipNatives(Version version)
         {
             try
@@ -537,6 +694,18 @@ namespace OMCL_DLL.Tools
                 }
                 string path_noafter = path + filesp + sp_name[^2] + '-' + sp_name[^1];
                 path = path_noafter + ".jar";
+                /*
+                if (name.Contains("universal") || name.EndsWith(":all") || name.EndsWith(":api") || name.Split(':').Last().Contains("natives") || name.Split(':').Last().Contains("linux"))
+                {
+                    string value_last = name.Split(':').Last();
+                    path = GetPathFromName(name.Remove(name.Length - (value_last.Length + 1), value_last.Length + 1)).Replace(".jar", '-' + value_last + ".jar");
+                }
+                else
+                {
+                    path = GetPathFromName(name);
+                }
+                */
+                path = GetPathFromName(name);
                 bool cr = true;
                 try
                 {
@@ -544,13 +713,13 @@ namespace OMCL_DLL.Tools
                     cr = CheckRuleInJson(rules, sysname);
                 }
                 catch { }
-                if (sp_name.Last() == "natives-" + sysname + (RuntimeInformation.OSArchitecture == Architecture.X64 ? "" : ('-' + RuntimeInformation.OSArchitecture.ToString().ToLower())))//To Support the version above 1.19.3
+                if (cr)
                 {
-                    L_natives.Add(path);
-                }
-                else if (sp_name.Last().StartsWith("natives-")) continue;
-                else if (cr)
-                {
+                    if (sp_name.Last() == "natives-" + sysname + (RuntimeInformation.OSArchitecture == Architecture.X64 ? "" : ('-' + RuntimeInformation.OSArchitecture.ToString().ToLower())))//To Support the version above 1.19.3
+                    {
+                        L_natives.Add(path);
+                    }
+                    else if (sp_name.Last().StartsWith("natives-")) continue;
                     if (path.ToLower().Contains("optifine"))
                     {
                         L_libraries_Last.Add(path);
@@ -559,22 +728,22 @@ namespace OMCL_DLL.Tools
                     {
                         L_libraries.Add(path);
                     }
-                }
-                JToken natives_sysname = lib.SelectToken("downloads.classifiers");
-                if (natives_sysname != null)
-                {
-                    try
+                    JToken natives_sysname = lib.SelectToken("downloads.classifiers");
+                    if (natives_sysname != null)
                     {
-                        _ = natives_sysname.SelectToken("natives-" + sysname, true);
-                        L_natives.Add(path_noafter + "-natives-" + sysname + ".jar");
+                        try
+                        {
+                            _ = natives_sysname.SelectToken("natives-" + sysname, true);
+                            L_natives.Add(path_noafter + "-natives-" + sysname + ".jar");
+                        }
+                        catch { }
                     }
-                    catch { }
-                }
-                natives_sysname = lib.SelectToken("natives." + sysname);
-                if (natives_sysname != null)
-                {
-                    string na = natives_sysname.ToString();
-                    L_natives.Add((path_noafter + '-' + na + ".jar").Replace("${arch}", Environment.Is64BitOperatingSystem ? "64" : "32"));
+                    natives_sysname = lib.SelectToken("natives." + sysname);
+                    if (natives_sysname != null)
+                    {
+                        string na = natives_sysname.ToString();
+                        L_natives.Add((path_noafter + '-' + na + ".jar").Replace("${arch}", Environment.Is64BitOperatingSystem ? "64" : "32"));
+                    }
                 }
             }
             L_libraries.AddRange(L_libraries_Last);
@@ -671,7 +840,7 @@ namespace OMCL_DLL.Tools
                     string sysver = Environment.OSVersion.Version.ToString();
                     if (!Regex.Match(sysver, version).Success) 
                     {
-                        t_version = false;
+                        r_version = false;
                     }
                 }
                 if (r_name && r_arch && r_version)
@@ -950,8 +1119,9 @@ namespace OMCL_DLL.Tools
                     OMCLLog.WriteLog("[Tools_LaunchGame]版本 " + version + " 有问题，请重新下载！", OMCLExceptionClass.DLL, OMCLExceptionType.Error);
                     throw new OMCLException("版本有问题！请重新下载！");
                 }
+                Directory.CreateDirectory(Path.Combine(new string[] { Dir, ".minecraft", "assets" }));
                 Version ver = ReadVersionJson(version);
-                DownloadMissFiles(ver);
+                DownloadMissFiles(version);
                 string GameCMD = "";
                 if (NativesPath == "")
                 {
@@ -988,7 +1158,7 @@ namespace OMCL_DLL.Tools
                 */
                 if (ver_jvm != null && ver_jvm != "")
                 {
-                    GameCMD += (MaxMem > 0 ? ("-Xmx" + MaxMem + "m ") : "") + "-Dlog4j2.formatMsgNoLookups=true " /*+ (IsLoggingFileOK ? "\"-Dlog4j.configurationFile=${path}\" ".Replace("${path}", Path.Combine(new string[] { Dir, ".minecraft", ver.loggingFile.FileName })) : "")*/ + ver_jvm.Replace("${natives_directory}", NativesPath).Replace("${launcher_name}", "OMCL").Replace("${launcher_version}", OMCLver).Replace("${classpath}", classpath) + ' ';
+                    GameCMD += (MaxMem > 0 ? ("-Xmx" + MaxMem + "m ") : "") + "-Dlog4j2.formatMsgNoLookups=true " /*+ (IsLoggingFileOK ? "\"-Dlog4j.configurationFile=${path}\" ".Replace("${path}", Path.Combine(new string[] { Dir, ".minecraft", ver.loggingFile.FileName })) : "")*/ + ver_jvm.Replace("${natives_directory}", NativesPath).Replace("${launcher_name}", "OMCL").Replace("${launcher_version}", OMCLver).Replace("${classpath}", classpath).Replace("${classpath_separator}", (sysname == "windows") ? ";" : ":").Replace("${library_directory}", Path.Combine(new string[] { Dir, ".minecraft", "libraries" })).Replace("${version_name}", version) + ' ';
                 }
                 else
                 {
@@ -1154,7 +1324,7 @@ namespace OMCL_DLL.Tools
                     for (int i = OutputLines.Count - 1; i >= 0; i--)
                     {
                         string s = OutputLines[i];
-                        if (s != null && (s.Contains("Exception") || s.Contains("unable")))
+                        if (s != null && (s.ToLower().Contains("exception") || s.Contains("unable") || s.Contains("Unrecognized")))
                         {
                             //OMCLLog.WriteLog("[CrashMessageGet]Minecraft报出了这个错误：<" + s + ">。", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
                             if (ex != "") ex += "\n\n";
@@ -1162,18 +1332,20 @@ namespace OMCL_DLL.Tools
                             ex += s;
                             if (s.Contains("StackOverflowError")) ex += '\n' + "可能的原因：栈内存溢出！";
                             if (s.Contains("fmlclient") || s.Contains("fml") || s.Contains("forge")) ex += '\n' + "可能的原因：forge安装失败或不完整！";
-                            if (s.Contains("Cannot find launch target")) ex += '\n' + "可能的原因：Minecraft安装错误！";
-                            if (s.Contains('[')) break;
+                            if (s.Contains("Cannot find launch target") || s.Contains("no existing")) ex += '\n' + "可能的原因：Minecraft安装错误或不完整！";
+                            if (s.Contains("ClassCastException") || s.Contains("Unrecognized option")) ex += '\n' + "可能的原因：Java版本错误！";
+                            //if (s.Contains('[')) break;
                         }
                     }
                     OMCLLog.WriteLog("[CrashMessageGet]Minecraft报出的错误：<" + ex + ">。", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
                     if (ExitCode == 1)
                     {
-                        OMCLLog.WriteLog("[CrashMessageGet]检测到Minecraft退出代码为1，不会产生崩溃日志，断定为：Minecraft被强制终止！", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
-                        crashMessage.Message = "您的Minecraft可能被强制停止！";
-                        crashMessage.Solution = "1、请检查是否有杀毒软件杀掉了Minecraft的进程。\n" +
-                                                "2、请检查您是否使用 任务管理器 结束了Minecraft的进程。\n" +
-                                                "3、请检查其他启动器是否能够正常启动该版本。如果能，这可能是OMCL的问题，请将该问题详细地汇报给OMCL的开发者。" +
+                        OMCLLog.WriteLog("[CrashMessageGet]检测到Minecraft退出代码为1，不会产生崩溃日志，断定为：Minecraft被强制终止或意外退出！", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
+                        crashMessage.Message = "您的Minecraft可能被强制停止或意外退出！";
+                        crashMessage.Solution = "1、请检查您的Minecraft安装是否完整。\n" + 
+                                                "2、请检查是否有杀毒软件杀掉了Minecraft的进程。\n" +
+                                                "3、请检查您是否使用 任务管理器 结束了Minecraft的进程。\n" +
+                                                "4、请检查其他启动器是否能够正常启动该版本。如果能，这可能是OMCL的问题，请将该问题详细地汇报给OMCL的开发者。" +
                                                 ((ex != "" && ex != null) ? "\n" + ex : "");
                         OMCLLog.WriteLog("[CrashMessageGet]结果：\n" + crashMessage.Message + "\n\n可能的解决方法：\n" + crashMessage.Solution + "\n\nMinecraft退出代码：" + crashMessage.ExitCode + "\n版本名称：" + crashMessage.VersionName + "。", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
                         return crashMessage;
@@ -1293,7 +1465,7 @@ namespace OMCL_DLL.Tools
                 }
                 catch (Exception e)
                 {
-                    OMCLLog.WriteLog("[Tools_CrashMessageGet]分析崩溃时出现错误：" + @e.Message, OMCLExceptionClass.DLL, OMCLExceptionType.Error);
+                    OMCLLog.WriteLog("[Tools_CrashMessageGet]分析崩溃时出现错误：" + @e, OMCLExceptionClass.DLL, OMCLExceptionType.Error);
                     CrashMessage crashMessage = new CrashMessage
                     {
                         VersionName = version,
@@ -1301,6 +1473,7 @@ namespace OMCL_DLL.Tools
                         Message = "未找到任何可能的原因，且崩溃分析运行时出现错误！",
                         Solution = "请尝试重启该Minecraft版本。\n\nOMCL错误：" + @e.Message
                     };
+                    OMCLLog.WriteLog("[CrashMessageGet]结果：\n" + crashMessage.Message + "\n\n可能的解决方法：\n" + crashMessage.Solution + "\n\nMinecraft退出代码：" + crashMessage.ExitCode + "\n版本名称：" + crashMessage.VersionName + "。", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
                     return crashMessage;
                 }
             }
@@ -2147,10 +2320,11 @@ namespace OMCL_DLL.Tools
     {
         public class ForgeInstall
         {
-            public static List<string> ForgeDownloadList = new() { "forge", "asm", "cpw", "antlr", "electronwill", "jline", "maven", "jodah", "minecrell", "spongepowered" };
+            public static List<string> ForgeDownloadList = new() { "forge", "asm", "cpw", "antlr", "electronwill", "jline", "maven", "jodah", "minecrell", "spongepowered", "nashorn" };
             //Coding,don't use or forget it!!!!!!!!!
             public static async Task InstallForge(string version, string forgeFile, string java = "java")
             {
+                string side = "client";
                 char filesp;
                 if (Tools.GetSystemName() == "windows")
                 {
@@ -2181,35 +2355,6 @@ namespace OMCL_DLL.Tools
                 }
                 _ = Tools.ReadVersionJson(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", version, version + ".json" }), out JArray arguments, out JArray libraries, out JArray jvm);
                 JObject o = JObject.Parse(File.ReadAllText(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", version, version + ".json" })));
-                /*
-                if (NminecraftArguments == "" || NminecraftArguments == null)
-                {
-                    arguments.Merge(Narguments);
-                    o.SelectToken("arguments.game").Replace(arguments);
-                }
-                else
-                {
-                    o["minecraftArguments"] = NminecraftArguments;
-                }
-                */
-                if (jvm != null && Njvm != null)
-                {
-                    jvm.Merge(Njvm);
-                    o.SelectToken("arguments.jvm").Replace(jvm);
-                }
-                Nlibraries.Merge(libraries);
-                arguments.Merge(Narguments);
-                o.SelectToken("libraries").Replace(Nlibraries);
-                try
-                {
-                    o.SelectToken("arguments.game").Replace(arguments);
-                }
-                catch
-                {
-                    o.SelectToken("minecraftArguments").Replace(forge_version_json.arguments);
-                }
-                o["mainClass"] = forge_version_json.mainClass;
-                File.WriteAllText(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", version, version + ".json" }), o.ToString());
                 JObject ipo;
                 if (File.Exists(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", "install_profile.json" })) && File.Exists(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", "version.json" })))
                 {
@@ -2219,12 +2364,59 @@ namespace OMCL_DLL.Tools
                 {
                     ipo = (JObject)ipo_versioninfo;
                 }
+                JToken install_profileo = JToken.Parse(File.ReadAllText(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", "install_profile.json" })));
+                string ipo_path = install_profileo.SelectToken("path")?.ToString();
+                string ipo_filepath = install_profileo.SelectToken("filePath")?.ToString();
+                if (ipo_filepath == null)
+                {
+                    ipo_filepath = install_profileo.SelectToken("install.filePath")?.ToString();
+                }
+                if (ipo_path == null)
+                {
+                    ipo_path = install_profileo.SelectToken("install.path")?.ToString();
+                }
+                if (ipo_filepath == null)
+                {
+                    if (ipo_path != null)
+                    {
+                        /*
+                        string path;
+                        try
+                        {
+                            int.Parse(ipo_path.Split(':').Last()[0].ToString());
+                            path = Tools.GetPathFromName(ipo_path);
+                        }
+                        catch
+                        {
+                            string value_last = ipo_path.Split(':').Last();
+                            path = Tools.GetPathFromName(ipo_path.Remove(ipo_path.Length - (value_last.Length + 1), value_last.Length + 1)).Replace(".jar", '-' + value_last + ".jar");
+                        }
+                        */
+                        string path = Tools.GetPathFromName(ipo_path);
+                        try
+                        {
+                            File.Copy(path.Replace(Path.Combine(new string[] { Tools.Dir, ".minecraft", "libraries" }), Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", "maven" })), path);
+                        }
+                        catch { }
+                        try
+                        {
+                            File.Copy(path.Replace(Path.Combine(new string[] { Tools.Dir, ".minecraft", "libraries" }), Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", "maven" })).Replace(".jar", "-universal.jar"), path.Replace(".jar", "-universal.jar"));
+                        }
+                        catch { }
+                    }
+                }
+                else
+                {
+                    try
+                    {
+                        File.Copy(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", ipo_filepath }), Tools.GetPathFromName(ipo_path));
+                    }
+                    catch { }
+                }
                 JArray iplib = (JArray)ipo.SelectToken("libraries");
                 foreach (JToken iplibitem in iplib)
                 {
                     string name = iplibitem.SelectToken("name").ToString();
-                    string path = GetPathFromName(name);
-                    //Console.WriteLine(path);
                     string url;
                     if (iplibitem.SelectToken("downloads.artifact.url") != null)
                     {
@@ -2238,7 +2430,7 @@ namespace OMCL_DLL.Tools
                     {
                         url = "https://libraries.minecraft.net/";
                     }
-                    DownloadForgeFile(url, path, true);
+                    Tools.DownloadMissLibraries(name, url);
                 }
                 if (ipo != ipo_versioninfo)
                 {
@@ -2247,15 +2439,68 @@ namespace OMCL_DLL.Tools
                     JObject ipdatajson = (JObject)JsonConvert.DeserializeObject(ipdata.ToString());
                     foreach (JProperty ipdatapro in ipdata.Properties())
                     {
-                        ipdatamap.Add(ipdatajson[ipdatapro.Name]["client"].ToString(), ipdatapro.Name);
+                        ipdatamap.Add(ipdatajson[ipdatapro.Name][side].ToString(), ipdatapro.Name);
+                        OMCLLog.WriteLog("[InstallForge]Data: Name: [ " + ipdatapro.Name + " ], Value: [ " + ipdatajson[ipdatapro.Name][side].ToString() + "] .", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
                     }
                     ipdatamap.Add(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", version, version + ".jar" }), "MINECRAFT_JAR");
+                    OMCLLog.WriteLog("[InstallForge]Data: Name: [ " + "MINECRAFT_JAR" + " ], Value: [ " + Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", version, version + ".jar" }) + "] .", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
+                    ipdatamap.Add(side, "SIDE");
+                    OMCLLog.WriteLog("[InstallForge]Data: Name: [ " + "SIDE" + " ], Value: [ " + side + "] .", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
                     JArray ipo_processors = (JArray)ipo.SelectToken("processors");
                     foreach (JToken ipo_processors_item in ipo_processors)
                     {
+                        try
+                        {
+                            JArray sides = (JArray)ipo_processors_item.SelectToken("sides");
+                            bool IsOK = false;
+                            foreach (JToken sides_item in sides)
+                            {
+                                if (sides_item.ToString() == side)
+                                {
+                                    IsOK = true;
+                                    break;
+                                }
+                            }
+                            if (!IsOK)
+                            {
+                                continue;
+                            }
+                        }
+                        catch { }
                         string jar = ipo_processors_item.SelectToken("jar").ToString();
                         string[] name_sp = jar.Split(':');
-                        string path = GetPathFromName(jar);
+                        string path = Tools.GetPathFromName(jar);
+                        /*
+                        if (jar.EndsWith(":all"))
+                        {
+                            string value_last = jar.Split(':').Last();
+                            path = Tools.GetPathFromName(jar.Remove(jar.Length - (value_last.Length + 1), value_last.Length + 1)).Replace(".jar", '-' + value_last + ".jar");
+                        }
+                        else
+                        {
+                            path = Tools.GetPathFromName(jar);
+                        }
+                        */
+                        try
+                        {
+                            Directory.Delete(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp_if_getmc" }), true);
+                        }
+                        catch { }
+                        Tools.UnZipFile(path, Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp_if_getmc" }) + '/', true);
+                        string[] lines = File.ReadAllLines(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp_if_getmc", "META-INF", "MANIFEST.MF" }));
+                        string MainClass = null;
+                        foreach (string line in lines)
+                        {
+                            if (line.StartsWith("Main-Class: "))
+                            {
+                                MainClass = line.Replace("Main-Class: ", "");
+                            }
+                        }
+                        if (MainClass == null)
+                        {
+                            throw new OMCLException("[ForgeInstall]jar 文件 { " + path + " } 的主类获取失败！");
+                        }
+                        /*
                         string MainClass = "";
                         for (int i = 0; i < name_sp.Length - 1; i++) 
                         {
@@ -2266,16 +2511,21 @@ namespace OMCL_DLL.Tools
                         {
                             MainClass += "SpecialSource";
                         }
+                        else if (MainClass.Contains("forgeautorenamingtool"))
+                        {
+                            MainClass = "net.minecraftforge.fart.Main";
+                        }
                         else
                         {
                             MainClass += "ConsoleTool";
                         }
+                        */
                         string cp = "";
                         JArray classpaths = (JArray)ipo_processors_item.SelectToken("classpath");
                         string systemName = Tools.GetSystemName();
                         foreach (JToken classpath in classpaths)
                         {
-                            cp += GetPathFromName(classpath.ToString()) + (systemName == "windows" ? ';' : ':');
+                            cp += Tools.GetPathFromName(classpath.ToString()) + (systemName == "windows" ? ';' : ':');
                         }
                         cp += path;
                         JArray args = (JArray)ipo_processors_item.SelectToken("args");
@@ -2290,8 +2540,10 @@ namespace OMCL_DLL.Tools
                                 if (value.StartsWith('[') && value.EndsWith(']'))
                                 {
                                     value = value.Remove(0, 1).Remove(value.Length - 2, 1);
-                                    string value_last = value.Split(':').Last();
-                                    string value_path = GetPathFromName(value.Remove(value.Length - (value_last.Length + 1), value_last.Length + 1)).Replace(".jar",'-' + value_last);
+                                    //string value_last = value.Split(':').Last();
+                                    string value_path = Tools.GetPathFromName(value);
+                                    /*
+                                    string value_path = Tools.GetPathFromName(value.Remove(value.Length - (value_last.Length + 1), value_last.Length + 1)).Replace(".jar",'-' + value_last);
                                     if (value_path.Contains('@'))
                                     {
                                         value_path = value_path.Replace('@', '.');
@@ -2300,6 +2552,7 @@ namespace OMCL_DLL.Tools
                                     {
                                         value_path += ".jar";
                                     }
+                                    */
                                     value = '\"' + value_path + '\"';
                                 }
                                 else if (value.StartsWith('/'))
@@ -2311,7 +2564,7 @@ namespace OMCL_DLL.Tools
                             else if (arg.StartsWith('[') && arg.EndsWith(']'))
                             {
                                 arg = arg.Remove(0, 1).Remove(arg.Length - 2, 1);
-                                args_str += GetPathFromName(arg);
+                                args_str += Tools.GetPathFromName(arg);
                             }
                             else
                             {
@@ -2331,86 +2584,68 @@ namespace OMCL_DLL.Tools
                                 RedirectStandardOutput = true,
                             },
                         };
+                        OMCLLog.WriteLog("[InstallForge]运行 { " + MainClass + " } 命令： [ " + java + " -cp " + '\"' + cp + "\" " + MainClass + ' ' + args_str + " ] 。", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
                         Console.WriteLine(java + " -cp " + '\"' + cp + "\" " + MainClass + ' ' + args_str);
                         p.OutputDataReceived += (object sender, DataReceivedEventArgs e) =>
                         {
+                            OMCLLog.WriteLog("[InstallForge]程序 { " + MainClass + " } 输出： [ " + e.Data + " ] 。", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
                             Console.WriteLine(e.Data);
                         };
                         p.ErrorDataReceived += (object sender, DataReceivedEventArgs e) =>
                         {
+                            OMCLLog.WriteLog("[InstallForge]程序 { " + MainClass + " } 输出： [ " + e.Data + " ] 。", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
                             Console.WriteLine(e.Data);
                         };
                         p.Start();
                         p.BeginErrorReadLine();
                         p.BeginOutputReadLine();
                         await p.WaitForExitAsync();
+                        OMCLLog.WriteLog("[InstallForge]程序 { " + MainClass + " } 返回： [ " + p.ExitCode + " ] 。", OMCLExceptionClass.DLL, OMCLExceptionType.Message);
                     }
                 }
+                if (jvm != null && Njvm != null)
+                {
+                    /*
+                    bool IsNeedToDownload = false;
+                    foreach (JToken j in Njvm) 
+                    {
+                        if (j.ToString() == "-p")
+                        {
+                            IsNeedToDownload = true;
+                            continue;
+                        }
+                        if (IsNeedToDownload)
+                        {
+                            string[] dfiles = j.ToString().Split("${classpath_separator}");
+                            foreach (string dfile in dfiles)
+                            {
+                                Tools.DownloadMissLibraries(Path.Combine(new string[] { Tools.Dir, ".minecraft", "libraries", dfile.Replace("${library_directory}", "").Remove(0, 1) }), dfile.Replace("${library_directory}", DownloadServers.MCFileDownloadServers[0].Forge[0]));
+                            }
+                            IsNeedToDownload = false;
+                        }
+                    }
+                    */
+                    jvm.Merge(Njvm);
+                    o.SelectToken("arguments.jvm").Replace(jvm);
+                }
+                Nlibraries.Merge(libraries);
+                o.SelectToken("libraries").Replace(Nlibraries);
+                try
+                {
+                    arguments.Merge(Narguments);
+                    o.SelectToken("arguments.game").Replace(arguments);
+                }
+                catch
+                {
+                    o.SelectToken("minecraftArguments").Replace(forge_version_json.arguments);
+                }
+                o["mainClass"] = forge_version_json.mainClass;
+                File.WriteAllText(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", version, version + ".json" }), o.ToString());
                 try
                 {
                     Directory.Delete(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp" }), true);
                 }
                 catch { }
-            }
-            public static void DownloadForgeFile(string url, string path, bool IsOnInstalling = false)
-            {
-                if (!File.Exists(path))
-                {
-                    if (url.StartsWith(DownloadServers.MCFileDownloadServers[0].Forge[0]))
-                    {
-                        HttpFile.Start(Tools.DownloadThreadNum, Tools.MCFileDownloadServer.Forge[0] + path.Replace(Path.Combine(new string[] { Tools.Dir, ".minecraft", "libraries" }), "").Replace('\\', '/'), path);
-                    }
-                    else if (url.StartsWith(DownloadServers.MCFileDownloadServers[0].Libraries))
-                    {
-                        HttpFile.Start(Tools.DownloadThreadNum, Tools.MCFileDownloadServer.Libraries + path.Replace(Path.Combine(new string[] { Tools.Dir, ".minecraft", "libraries" }), "").Replace('\\', '/'), path);
-                    }
-                    else if (url == "" && IsOnInstalling)
-                    {
-                        if (Directory.Exists(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", "maven" })))
-                        {
-                            try
-                            {
-                                File.Copy(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", "maven", path.Replace(Path.Combine(new string[] { Tools.Dir, ".minecraft", "libraries" }), "") }), path);
-                            }
-                            catch { }
-                            try
-                            {
-                                File.Copy(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", "maven", path.Replace(Path.Combine(new string[] { Tools.Dir, ".minecraft", "libraries" }), "").Replace(".jar", "-universal.jar") }), path);
-                            }
-                            catch { }
-                        }
-                        else if (File.Exists(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", Path.GetFileName(path) })))
-                        {
-                            File.Copy(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", Path.GetFileName(path) }), path);
-                        }
-                        else if (File.Exists(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", Path.GetFileName(path).Replace(".jar", "-universal.jar") })))
-                        {
-                            File.Copy(Path.Combine(new string[] { Path.GetTempPath(), "OMCL", "temp", Path.GetFileName(path).Replace(".jar", "-universal.jar") }), path);
-                        }
-                    }
-                }
-            }
-            private static string GetPathFromName(string name)
-            {
-                bool name_at = false;
-                if (name.Contains('@'))
-                {
-                    name_at = true;
-                    name = name.Replace("@zip", "");
-                }
-                string[] name_sp = name.Split(':');
-                string[] name_sp0_sp = name_sp[0].Split('.');
-                List<string> name_path = new() { Tools.Dir, ".minecraft", "libraries" };
-                foreach (string name_sp0_sp_item in name_sp0_sp)
-                {
-                    name_path.Add(name_sp0_sp_item);
-                }
-                for (int i = 1; i < name_sp.Length; i++)
-                {
-                    name_path.Add(name_sp[i]);
-                }
-                name_path.Add(name_sp[^2] + '-' + name_sp[^1] + (name_at == true ? ".zip" : ".jar"));
-                return Path.Combine(name_path.ToArray());
             }
         }
         public class MinecraftInstall
@@ -2430,7 +2665,7 @@ namespace OMCL_DLL.Tools
                 if (!File.Exists(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", versionName, versionName + ".json" }))) File.WriteAllText(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", versionName, versionName + ".json" }), json);
                 string ujar = JObject.Parse(json).SelectToken("downloads.client.url").ToString();
                 if (!File.Exists(Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", versionName, versionName + ".jar" }))) HttpFile.Start(Tools.DownloadThreadNum, ujar, Path.Combine(new string[] { Tools.Dir, ".minecraft", "versions", versionName, versionName + ".jar" }));
-                if (IsDownloadLibraries) Tools.DownloadMissFiles(Tools.ReadVersionJson(versionName));
+                if (IsDownloadLibraries) Tools.DownloadMissFiles(versionName);
                 if (IsDownloadAssets) await Tools.DownloadMissAsstes(versionName);
             }
         }

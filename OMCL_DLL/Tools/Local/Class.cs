@@ -85,12 +85,13 @@ namespace OMCL_DLL.Tools
         public string[] Forge = new string[2];
         public string[] Fabric = new string[2];
         public string[] NeoForge = new string[2];
+        public string NeoForge_Maven = "";
         public string[] quilt = new string[2];
         public DownloadServer() { }
     }
     public class DownloadServers
     {
-        public static readonly DownloadServer[] MCFileDownloadServers = new DownloadServer[3]
+        public static readonly DownloadServer[] MCFileDownloadServers = new DownloadServer[4]
         {
             new()
             {
@@ -126,6 +127,7 @@ namespace OMCL_DLL.Tools
                     "https://maven.neoforged.net/releases/net/neoforged/forge",
                     "https://maven.neoforged.net/releases/net/neoforged/neoforge",
                 },
+                NeoForge_Maven = "https://maven.neoforged.net/releases",
                 quilt = new string[2]
                 {
                     "https://maven.quiltmc.org/repository/release",
@@ -166,6 +168,7 @@ namespace OMCL_DLL.Tools
                     "https://bmclapi2.bangbang93.com/maven/net/neoforged/forge",
                     "https://bmclapi2.bangbang93.com/maven/net/neoforged/neoforge",
                 },
+                NeoForge_Maven = "https://maven.neoforged.net/releases",
                 quilt = new string[2]
                 {
                     "https://bmclapi2.bangbang93.com/maven",
@@ -206,10 +209,52 @@ namespace OMCL_DLL.Tools
                     "https://download.mcbbs.net/maven/net/neoforged/forge",
                     "https://download.mcbbs.net/maven/net/neoforged/neoforge",
                 },
+                NeoForge_Maven = "https://maven.neoforged.net/releases",
                 quilt = new string[2]
                 {
                     "https://download.mcbbs.net/maven",
                     "https://download.mcbbs.net/quilt-meta",
+                },
+            },
+            new()
+            {
+                VersionInfo = new string[2]
+                {
+                    "https://launchermeta.mojang.com/mc/game/version_manifest.json",
+                    "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json",
+                },
+                VersionJsonAndAssetsIndex = new string[3]
+                {
+                    "https://piston-meta.mojang.com",
+                    "https://launchermeta.mojang.com",
+                    "https://launcher.mojang.com",
+                },
+                Assets = "https://resources.download.minecraft.net",
+                Libraries = "https://libraries.minecraft.net",
+                Java = "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json",
+                LiteLoader = "https://dl.liteloader.com/versions/versions.json",
+                Optifine = "",
+                authlib_injector = "https://authlib-injector.yushi.moe",
+                Forge = new string[2]
+                {
+                    "https://maven.creeperhost.net",
+                    "https://files.minecraftforge.net/maven",
+                },
+                Fabric = new string[2]
+                {
+                    "https://meta.fabricmc.net",
+                    "https://maven.fabricmc.net",
+                },
+                NeoForge = new string[2]
+                {
+                    "https://maven.neoforged.net/releases/net/neoforged/forge",
+                    "https://maven.neoforged.net/releases/net/neoforged/neoforge",
+                },
+                NeoForge_Maven = "https://maven.neoforged.net/releases",
+                quilt = new string[2]
+                {
+                    "https://maven.quiltmc.org/repository/release",
+                    "https://meta.quiltmc.org",
                 },
             },
         };

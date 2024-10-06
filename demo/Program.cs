@@ -123,13 +123,15 @@ namespace demo
             //await InstallMinecraft.MinecraftInstall.InstallMinecraftVersion("1.1", "1.1", true, true);
             //InstallMinecraft.MinecraftInstall.InstallMinecraftVersion("1.8", "1.8", true, true);
             //Tools.DownloadMissAsstes("1.1");
-
-            await InstallMinecraft.MinecraftInstall.InstallMinecraftVersion("1.16.5-Forge", "1.16.5", false, false);
-            await InstallMinecraft.ForgeInstall.InstallForge("1.16.5-Forge", @"F:\桌面\2024.2.11\Forge\forge-1.16.5-36.2.39-installer.jar");
-            Tools.DownloadMissFiles(Tools.ReadVersionJson("1.16.5-Forge"));
-            Tools.LaunchMinecraft launch = new Tools.LaunchMinecraft();
+            /*
+            await InstallMinecraft.MinecraftInstall.InstallMinecraftVersion("1.8.9-Forge", "1.8.9", false, false);
+            await InstallMinecraft.ForgeInstall.InstallForge("1.8.9-Forge", @"F:\桌面\2024.2.11\Forge\forge-1.8.9-11.15.1.2318-1.8.9-installer.jar");
+            */
+            Tools.DownloadMissFiles("1.8.9-Forge");
+            
+            Tools.LaunchMinecraft launch = new();
             launch.OnMinecraftCrash += Launch_OnMinecraftCrash;
-            await launch.LaunchGame(@"C:\Program Files\Java\jre1.8.0_331\bin\java.exe", "1.16.5-Forge", "AAA");
+            await launch.LaunchGame(@"C:\Program Files\Java\jre1.8.0_331\bin\java.exe", "1.8.9-Forge", "AAA");
             /*
             Tools.LaunchMinecraft launch = new Tools.LaunchMinecraft();
             //launch.IsIsolation = false;
